@@ -90,10 +90,10 @@ func (s *AgentService) Chat(ctx context.Context, id, query string, agentCfg, cor
 	trace("Frontend", "Agent", "Receive Query", query)
 
 	// Trace: Agent -> Core (Get Context)
-	trace("Agent", "Core", "Get Optimized Context", coreCfg)
+	trace("Agent", "Core", "Get Optimized Context", map[string]interface{}{"query": query, "config": coreCfg})
 	
 	// Trace: Core -> Agent (Context Received)
-	trace("Core", "Agent", "Return Payload", map[string]interface{}{"msg_count": len(payload)})
+	trace("Core", "Agent", "Return Payload", payload)
 
 	// Send initial meta
 	if len(payload) > 0 && payload[len(payload)-1].Meta != nil {
@@ -107,7 +107,7 @@ func (s *AgentService) Chat(ctx context.Context, id, query string, agentCfg, cor
 	save := func() {
 		if full.Len() > 0 {
 			// Trace: Agent -> Core (Save Assistant Message)
-			trace("Agent", "Core", "Append Assistant Message")
+			trace("Agent", "Core", "Append Assistant Message", full.String())
 			meta := s.coreSvc.Append(context.Background(), id, domain.Message{
 				Role:      "assistant",
 				Content:   full.String(),
@@ -123,7 +123,7 @@ func (s *AgentService) Chat(ctx context.Context, id, query string, agentCfg, cor
 	}
 
 	// Trace: Agent -> LLM (Start Stream)
-	trace("Agent", "LLM", "Start Streaming", agentCfg.Model)
+	trace("Agent", "LLM", "Start Streaming", map[string]interface{}{"model": agentCfg.Model, "prompt": payload})
 
 	go func() {
 		defer close(out)

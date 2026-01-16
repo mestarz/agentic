@@ -1,59 +1,44 @@
-# ContextFabric 核心设计与实现细节 (Current Progress)
+# ContextFabric 核心实现细节
 
-## 1. 核心工程模式
+## 1. 彻底解耦设计
+本项目在开发过程中经历从单体到分布式整合，最终演进为**完全自包含 (Self-contained)** 的双服务模式。
+- **Core 与 Agent 零共享代码**：即使是相似的模型定义，也分别存在于各自的 `domain` 包下。这种“冗余”是为了换取生产环境下的独立部署与升级能力。
+- **基于端口的内部通信**：Agent 通过标准 HTTP 协议与 Core 通信，模拟了真实微服务环境。
 
-当前代码实现严格遵循了**整洁架构 (Clean Architecture)** 和 **领域驱动设计 (DDD)** 的简化版，采用了以下核心模式：
+## 2. 上下文加工 Pipeline
 
-### 1.1. 依赖注入 (Dependency Injection)
-在 `cmd/server/main.go` 中，我们手动执行了依赖注入。
-- **优点**: 各层之间完全解耦。例如，`ChatOrchestrator` 只依赖于 `domain.ContextEngine` 接口，而不关心它是如何压缩上下文的。这使得我们可以轻松地将 `MockLLM` 替换为 `OpenAILLM`。
+当 Agent 调用 `/api/v1/context` 时，Core 执行以下 Pipeline：
 
-### 1.2. 仓储模式 (Repository Pattern)
-`FileHistoryRepository` 封装了所有底层文件 IO。
-- **线程安全**: 使用 `sync.RWMutex` 保护文件读写，防止在高并发对话时出现文件损坏。
-- **原子性写入**: 采用“写临时文件 + Rename”策略，确保在程序意外崩溃时，原始 JSON 数据不会被截断或损坏。
+1. **历史提取**：从 JSON 文件读取该 Session 的全量记录。
 
-### 1.3. 编排器模式 (Orchestrator Pattern)
-`ChatOrchestrator` 充当了“导演”角色，它不包含具体的算法逻辑，只负责协调：
-1. **状态持久化**: 调用 HistoryService。
-2. **上下文加工**: 调用 ContextEngine。
-3. **模型执行**: 调用 LLMProvider。
+2. **系统注入**：自动头部注入带时间戳的 System Instruction。
 
----
+3. **精准 Token 计算**：集成 `github.com/pkoukk/tiktoken-go` (cl100k_base)，确保在各种模型下的 Token 计数精准度，尤其在长文本和中英混合场景下。
 
-## 2. 关键代码检视
+4. **智能截断**：基于 tiktoken 结果，从后往前保留历史，确保不超出 4000 字符的历史上限。
 
-### 2.1. 领域模型 (internal/domain/models.go)
-- **Message 结构**: 包含了 `Meta` 字段（`map[string]interface{}`），为后续存储 Token 消耗、模型参数、甚至是多模态数据预留了空间。
-- **Role 常量**: 使用 `RoleUser`, `RoleAssistant` 等常量，避免了代码中硬编码字符串带来的风险。
 
-### 2.2. 存储层实现 (internal/infrastructure/persistence/file_repo.go)
-- **单会话单文件**: 保证了扩展性。读取单个 Session 不需要加载整个数据库。
-- **ListSessions**: 目前通过遍历目录实现。在 MVP 阶段性能足够，但在海量数据下需要建立索引文件（这也是未来的优化点）。
 
-### 2.3. 上下文引擎 (internal/service/context/engine.go)
-- **当前状态**: 处于 "Pass-through"（透传）阶段。
-- **扩展性**: 它已经注入了 `LLMProvider`。这意味着它随时可以发起一次内部 LLM 调用来生成历史摘要（Summarization）。
+## 3. 流式架构与结构化传输
 
----
+系统全程支持 **Server-Sent Events (SSE)**：
 
-## 3. 实现状态概览 (Progress Map)
+- **结构化 JSON 传输**：放弃了不稳定的文本前缀模式，采用统一的 `SSEResponse` 结构体，包含 `type` (chunk/meta/trace)、`content`、`meta` 等字段，解决了换行符丢失和解析不一致问题。
 
-| 模块 | 功能点 | 状态 | 备注 |
-| :--- | :--- | :--- | :--- |
-| **Storage** | 会话持久化 (JSON) | ✅ 完成 | 支持并发安全和原子写 |
-| **History** | 消息追加与获取 | ✅ 完成 | 封装了基础 CRUD |
-| **Orchestrator** | 对话全流程串联 | ✅ 完成 | 支持端到端对话测试 |
-| **Infrastructure** | Mock LLM | ✅ 完成 | 用于离线测试 |
-| **Infrastructure** | OpenAI LLM | ⏳ 待办 | 需要集成 SDK 或 HTTP 调用 |
-| **Context Engine** | 滑动窗口压缩 | ⏳ 待办 | 核心算法点 |
-| **Context Engine** | 自动摘要压缩 | ⏳ 待办 | 需要调用内部 LLM |
-| **Web Admin** | 界面管理 | ⏳ 待办 | 后续开发 |
+- **状态同步**：流式结束后，Agent 调用 Core 接口保存 AI 回复及完整的 Pipeline Traces。
 
----
 
-## 4. 下一步演进建议
 
-1. **增强 Context Engine**: 引入 `tiktoken-go` 或类似库进行准确的 Token 计数，并实现“超过阈值自动截断”的逻辑。
-2. **LLM 适配器**: 实现真实的 `OpenAILLM` 客户端，支持环境变量配置 API Key。
-3. **管理端 API**: 在 `api/admin_handler.go` 中实现 `ListSessions` 和 `GetSessionDetail` 接口，为前端界面提供数据支撑。
+## 4. 交互追踪 (Pipeline Observer)
+
+- **实时监控**：Agent 在与前端、Core 及外部 LLM 交互的每个关键节点产生 `TraceEvent`。
+
+- **持久化溯源**：Traces 被存储在 `Message` 模型的 `traces` 字段中，支持会话重启后的历史流程查看。
+
+- **可视化**：前端提供可折叠/展开的“流程观察器”，通过高对比度 UI 展示 Pipeline 轨迹。
+
+
+
+## 5. 安全性
+
+- **API Key 无痕化**：Keys 仅存在于浏览器 LocalStorage (cf_app_configs) 和内存变量中。

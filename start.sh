@@ -2,29 +2,37 @@
 
 ROOT_DIR=$(cd "$(dirname "$0")"; pwd)
 LOG_DIR="$ROOT_DIR/logs"
-mkdir -p "$LOG_DIR"
+BIN_DIR="$ROOT_DIR/bin"
+mkdir -p "$LOG_DIR" "$BIN_DIR"
 
-echo "正在启动 ContextFabric 服务 (分层架构)..."
+# 清理代理
+unset http_proxy https_proxy all_proxy
+export NO_PROXY="localhost,127.0.0.1,0.0.0.0"
 
-# 1. 启动后端
-echo "启动后端 Go 服务 (Port: 9090)..."
-cd "$ROOT_DIR/backend"
-go build -o ../context-fabric-server ./cmd/server/main.go
-cd "$ROOT_DIR"
-nohup ./context-fabric-server > "$LOG_DIR/backend.log" 2>&1 &
-BACKEND_PID=$!
-echo $BACKEND_PID > "$LOG_DIR/backend.pid"
+echo "正在启动 ContextFabric 完全隔离版 (Core + Agent)..."
 
-# 2. 启动前端
-echo "启动前端 React 服务 (Port: 5173)..."
+# 1. 编译并启动 Core
+echo "编译 Core 服务..."
+cd "$ROOT_DIR/backend/core"
+go build -o "$BIN_DIR/cf-core" ./main.go
+nohup "$BIN_DIR/cf-core" > "$LOG_DIR/core.log" 2>&1 &
+echo $! > "$LOG_DIR/core.pid"
+
+# 2. 编译并启动 Agent
+echo "编译 Agent 服务..."
+cd "$ROOT_DIR/backend/agent"
+go build -o "$BIN_DIR/cf-agent" ./main.go
+nohup "$BIN_DIR/cf-agent" > "$LOG_DIR/agent.log" 2>&1 &
+echo $! > "$LOG_DIR/agent.pid"
+
+# 3. 启动前端
+echo "启动前端 React 服务..."
 cd "$ROOT_DIR/frontend"
-nohup npm run dev -- --host > "$LOG_DIR/frontend.log" 2>&1 &
-FRONTEND_PID=$!
-echo $FRONTEND_PID > "$LOG_DIR/frontend.pid"
+nohup npm run dev -- --host 0.0.0.0 > "$LOG_DIR/frontend.log" 2>&1 &
+echo $! > "$LOG_DIR/frontend.pid"
 
 echo "---------------------------------------"
-echo "服务启动成功！"
-echo "前端地址: http://localhost:5173"
-echo "日志目录: $LOG_DIR"
-echo "停止服务: ./stop.sh"
+echo "系统启动指令已发出！"
+sleep 3
+netstat -tulpn | grep -E '9090|9091|5173'
 echo "---------------------------------------"

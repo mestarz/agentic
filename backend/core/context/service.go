@@ -61,7 +61,7 @@ type Service struct {
 
 func NewService(h *history.Service, e *Engine) *Service { return &Service{historySvc: h, engine: e} }
 func (s *Service) CreateSession(ctx context.Context, appID string) (*domain.Session, error) {
-	return s.historySvc.GetOrCreateSession(ctx, "session-"+time.Now().Format("05"), appID)
+	return s.historySvc.GetOrCreateSession(ctx, "session-"+time.Now().Format("20060102150405.000000"), appID)
 }
 func (s *Service) AppendMessage(ctx context.Context, id string, msg domain.Message) (map[string]interface{}, error) {
 	err := s.historySvc.Append(ctx, id, msg)

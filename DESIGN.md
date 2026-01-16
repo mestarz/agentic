@@ -52,7 +52,6 @@ backend/
 │   ├── persistence/    # JSON 文件仓储
 │   └── domain/         # Core 内部模型
 └── agent/              # 应用服务：Agent 交互入口
-    ├── api/            # 实验性 Debug 接口
     ├── logic/          # Agent 交互流控
     ├── llm/            # 模型调用适配器
     └── domain/         # Agent 内部模型

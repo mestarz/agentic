@@ -69,13 +69,20 @@ export function SequenceObserver({
 
                 {/* 交互箭头列表 */}
                 <div className="relative space-y-12">
-                  {currentSession.messages[activeTraceIndex].traces?.map((t, idx) => {
+                  {currentSession.messages[activeTraceIndex].traces?.map((t, idx, arr) => {
                     const posMap: any = { 'Frontend': 0, 'Agent': 1, 'Core': 2, 'LLM': 3 };
                     const from = posMap[t.source] ?? 0;
                     const to = posMap[t.target] ?? 0;
                     const left = Math.min(from, to) * 25 + 12.5;
                     const width = Math.abs(from - to) * 25;
                     const isRight = to > from;
+
+                    // Calculate duration
+                    const prevTime = idx > 0 ? new Date(arr[idx-1].timestamp).getTime() : new Date(t.timestamp).getTime();
+                    const currTime = new Date(t.timestamp).getTime();
+                    const durationMs = currTime - prevTime;
+                    const durationStr = durationMs > 1000 ? `+${(durationMs/1000).toFixed(2)}s` : `+${durationMs}ms`;
+                    const isLong = durationMs > 1000;
 
                     return (
                       <div 
@@ -87,9 +94,10 @@ export function SequenceObserver({
                           width: `${width}%`,
                         }}
                       >
-                        {/* 消息标签 */}
-                        <div className={`absolute -top-5 left-0 right-0 text-center transition-all ${selectedTraceId === idx ? 'text-indigo-600 font-black' : 'text-slate-400 font-bold group-hover:text-slate-600'}`}>
+                        {/* 消息标签与耗时 */}
+                        <div className={`absolute -top-5 left-0 right-0 text-center transition-all flex items-center justify-center gap-1 ${selectedTraceId === idx ? 'text-indigo-600 font-black' : 'text-slate-400 font-bold group-hover:text-slate-600'}`}>
                           <span className="text-[10px] bg-white/80 px-2 py-0.5 rounded-full border border-slate-100 shadow-sm whitespace-nowrap">{t.action}</span>
+                          <span className={`text-[8px] font-mono ${isLong ? 'text-amber-500 font-bold' : 'text-slate-300'}`}>{durationStr}</span>
                         </div>
                         
                         {/* 箭头线 */}
@@ -118,7 +126,15 @@ export function SequenceObserver({
           <div className="h-6 bg-slate-100 border-t border-slate-200 flex items-center px-3 gap-4 z-30">
             <div className="flex items-center gap-1"><span className="text-[8px] font-black text-slate-400 uppercase">Msg:</span> <span className="text-[9px] font-mono font-bold text-indigo-600">{activeTraceIndex ?? 'null'}</span></div>
             <div className="flex items-center gap-1"><span className="text-[8px] font-black text-slate-400 uppercase">Step:</span> <span className="text-[9px] font-mono font-bold text-emerald-600">{selectedTraceId ?? 'null'}</span></div>
-            <div className="flex items-center gap-1"><span className="text-[8px] font-black text-slate-400 uppercase">TraceCount:</span> <span className="text-[9px] font-mono font-bold text-slate-600">{currentSession?.messages[activeTraceIndex!]?.traces?.length || 0}</span></div>
+            <div className="flex items-center gap-1"><span className="text-[8px] font-black text-slate-400 uppercase">Count:</span> <span className="text-[9px] font-mono font-bold text-slate-600">{currentSession?.messages[activeTraceIndex!]?.traces?.length || 0}</span></div>
+            {currentSession?.messages[activeTraceIndex!]?.traces && currentSession.messages[activeTraceIndex!].traces!.length > 0 && (
+              <div className="flex items-center gap-1 ml-auto">
+                <span className="text-[8px] font-black text-slate-400 uppercase">Total:</span> 
+                <span className="text-[9px] font-mono font-bold text-amber-600">
+                  {((new Date(currentSession.messages[activeTraceIndex!].traces!.slice(-1)[0].timestamp).getTime() - new Date(currentSession.messages[activeTraceIndex!].traces![0].timestamp).getTime()) / 1000).toFixed(2)}s
+                </span>
+              </div>
+            )}
           </div>
         </div>
 
@@ -136,6 +152,7 @@ export function SequenceObserver({
                 if (activeTraceIndex === null || !currentSession?.messages) return null;
                 const targetMsg = currentSession.messages[activeTraceIndex];
                 const currentTrace = targetMsg?.traces?.[selectedTraceId];
+                const prevTrace = selectedTraceId > 0 ? targetMsg?.traces?.[selectedTraceId - 1] : null;
                 
                 if (!currentTrace) return (
                   <div className="h-full flex flex-col items-center justify-center text-slate-300 gap-2 mt-20">
@@ -148,6 +165,10 @@ export function SequenceObserver({
                     </div>
                   </div>
                 );
+
+                const durationMs = prevTrace 
+                  ? new Date(currentTrace.timestamp).getTime() - new Date(prevTrace.timestamp).getTime() 
+                  : 0;
 
                 return (
                   <div className="space-y-6">
@@ -172,10 +193,18 @@ export function SequenceObserver({
                         </pre>
                       </div>
                     </div>
-                    <div className="pt-4 border-t border-slate-100">
-                      <div className="text-[8px] font-black text-slate-400 uppercase">执行时间</div>
-                      <div className="text-[10px] font-mono text-slate-500 mt-1">
-                        {new Date(currentTrace.timestamp).toLocaleString()}
+                    <div className="pt-4 border-t border-slate-100 grid grid-cols-2 gap-4">
+                      <div>
+                        <div className="text-[8px] font-black text-slate-400 uppercase">执行时间</div>
+                        <div className="text-[10px] font-mono text-slate-500 mt-1">
+                          {new Date(currentTrace.timestamp).toLocaleTimeString()}
+                        </div>
+                      </div>
+                      <div>
+                        <div className="text-[8px] font-black text-slate-400 uppercase">Step 耗时</div>
+                        <div className={`text-[10px] font-mono font-bold mt-1 ${durationMs > 1000 ? 'text-amber-500' : 'text-emerald-600'}`}>
+                           +{durationMs} ms
+                        </div>
                       </div>
                     </div>
                   </div>

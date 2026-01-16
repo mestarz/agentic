@@ -1,0 +1,43 @@
+# Binaries
+context-fabric-server
+backend/context-fabric-server
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+server
+
+# Logs
+logs/
+*.log
+
+# Data (Conversations)
+data/sessions/*.json
+!data/sessions/.gitkeep
+
+# Go
+vendor/
+go.sum
+
+# Node.js
+node_modules/
+frontend/node_modules/
+dist/
+frontend/dist/
+.eslintcache
+
+# IDEs
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Environment
+.env
+.env.local
+.env.*.local

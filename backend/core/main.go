@@ -7,6 +7,8 @@ import (
 	"context-fabric/backend/core/persistence"
 	"log"
 	"net/http"
+	"os"
+	"path/filepath"
 )
 
 func cors(next http.Handler) http.Handler {
@@ -22,8 +24,23 @@ func cors(next http.Handler) http.Handler {
 	})
 }
 
+func getSessionDir() string {
+	if env := os.Getenv("AGENTIC_SESSIONS_DIR"); env != "" {
+		return env
+	}
+	home, err := os.UserHomeDir()
+	if err != nil {
+		log.Printf("Warning: Could not get user home dir, falling back to ./data/sessions: %v", err)
+		return "./data/sessions"
+	}
+	return filepath.Join(home, ".agentic", "sessions")
+}
+
 func main() {
-	repo, _ := persistence.NewFileHistoryRepository("./data/sessions")
+	sessionDir := getSessionDir()
+	log.Printf("[CORE] Session storage: %s", sessionDir)
+
+	repo, _ := persistence.NewFileHistoryRepository(sessionDir)
 	hSvc := history.NewService(repo)
 	cEng := context.NewEngine(repo)
 	cSvc := context.NewService(hSvc, cEng)

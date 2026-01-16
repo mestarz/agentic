@@ -15,6 +15,7 @@ logs/
 
 # Data (Conversations)
 data/sessions/*.json
+backend/core/data/sessions/
 !data/sessions/.gitkeep
 
 # Go

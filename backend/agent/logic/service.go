@@ -11,35 +11,47 @@ import (
 	"time"
 )
 
-type CoreClient struct {
+type CoreServiceClient struct {
 	url    string
 	client *http.Client
 }
 
-func NewCoreClient(u string) *CoreClient { return &CoreClient{url: u, client: &http.Client{}} }
-func (c *CoreClient) GetContext(ctx context.Context, id, query string, cfg domain.LLMConfig) ([]domain.Message, error) {
-	data, _ := json.Marshal(map[string]interface{}{"session_id": id, "query": query, "config": cfg})
-	resp, _ := c.client.Post(c.url+"/api/v1/context", "application/json", bytes.NewBuffer(data))
+func NewCoreServiceClient(u string) *CoreServiceClient { 
+	return &CoreServiceClient{url: u, client: &http.Client{Timeout: 10 * time.Second}} 
+}
+
+func (c *CoreServiceClient) GetOptimizedContext(ctx context.Context, id, query string, cfg domain.LLMConfig) ([]domain.Message, error) {
+	data, err := json.Marshal(map[string]interface{}{"session_id": id, "query": query, "config": cfg})
+	if err != nil { return nil, err }
+	
+	resp, err := c.client.Post(c.url+"/api/v1/context", "application/json", bytes.NewBuffer(data))
+	if err != nil { return nil, err }
 	defer resp.Body.Close()
+	
 	var res struct {
 		Messages []domain.Message `json:"messages"`
 	}
-	json.NewDecoder(resp.Body).Decode(&res)
+	if err := json.NewDecoder(resp.Body).Decode(&res); err != nil {
+		return nil, err
+	}
 	return res.Messages, nil
 }
-func (c *CoreClient) Append(ctx context.Context, id string, msg domain.Message) map[string]interface{} {
+
+func (c *CoreServiceClient) Append(ctx context.Context, id string, msg domain.Message) map[string]interface{} {
 	data, _ := json.Marshal(map[string]interface{}{"session_id": id, "message": msg})
+	
 	resp, err := c.client.Post(c.url+"/api/v1/messages", "application/json", bytes.NewBuffer(data))
 	if err != nil { return nil }
 	defer resp.Body.Close()
+	
 	var meta map[string]interface{}
 	json.NewDecoder(resp.Body).Decode(&meta)
 	return meta
 }
 
-type AgentService struct{ cc *CoreClient }
+type AgentService struct{ coreSvc *CoreServiceClient }
 
-func NewAgentService(cc *CoreClient) *AgentService { return &AgentService{cc: cc} }
+func NewAgentService(cc *CoreServiceClient) *AgentService { return &AgentService{coreSvc: cc} }
 type SSEResponse struct {
 	Type    string                 `json:"type"` // "chunk", "meta", "trace"
 	Content string                 `json:"content"`
@@ -48,7 +60,11 @@ type SSEResponse struct {
 }
 
 func (s *AgentService) Chat(ctx context.Context, id, query string, agentCfg, coreCfg domain.LLMConfig, out chan<- string) {
-	payload, _ := s.cc.GetContext(ctx, id, query, coreCfg)
+	payload, err := s.coreSvc.GetOptimizedContext(ctx, id, query, coreCfg)
+	if err != nil {
+		// Log error and optionally notify frontend
+		return
+	}
 	var collectedTraces []domain.TraceEvent
 	
 	send := func(resp SSEResponse) {
@@ -92,7 +108,7 @@ func (s *AgentService) Chat(ctx context.Context, id, query string, agentCfg, cor
 		if full.Len() > 0 {
 			// Trace: Agent -> Core (Save Assistant Message)
 			trace("Agent", "Core", "Append Assistant Message")
-			meta := s.cc.Append(context.Background(), id, domain.Message{
+			meta := s.coreSvc.Append(context.Background(), id, domain.Message{
 				Role:      "assistant",
 				Content:   full.String(),
 				Timestamp: time.Now(),

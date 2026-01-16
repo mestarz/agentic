@@ -26,7 +26,7 @@ func NewFileHistoryRepository(basePath string) (*FileHistoryRepository, error) {
 func (r *FileHistoryRepository) SaveSession(ctx context.Context, session *domain.Session) error {
 	r.mu.Lock()
 	defer r.mu.Unlock()
-	filePath := filepath.Join(r.basePath, fmt.Sprintf("%s.json", session.ID))
+	filePath := r.sessionPath(session.ID)
 	data, _ := json.MarshalIndent(session, "", "  ")
 	tmpPath := filePath + ".tmp"
 	os.WriteFile(tmpPath, data, 0644)
@@ -36,7 +36,7 @@ func (r *FileHistoryRepository) SaveSession(ctx context.Context, session *domain
 func (r *FileHistoryRepository) GetSession(ctx context.Context, id string) (*domain.Session, error) {
 	r.mu.RLock()
 	defer r.mu.RUnlock()
-	data, err := os.ReadFile(filepath.Join(r.basePath, fmt.Sprintf("%s.json", id)))
+	data, err := os.ReadFile(r.sessionPath(id))
 	if err != nil {
 		return nil, err
 	}
@@ -54,7 +54,8 @@ func (r *FileHistoryRepository) ListSessions(ctx context.Context) ([]*domain.Ses
 		if filepath.Ext(f.Name()) != ".json" {
 			continue
 		}
-		data, _ := os.ReadFile(filepath.Join(r.basePath, f.Name()))
+		data, err := os.ReadFile(filepath.Join(r.basePath, f.Name()))
+		if err != nil { continue }
 		var s domain.Session
 		json.Unmarshal(data, &s)
 		list = append(list, &domain.SessionSummary{ID: s.ID, AppID: s.AppID, UpdatedAt: s.UpdatedAt, MsgCount: len(s.Messages)})
@@ -66,14 +67,18 @@ func (r *FileHistoryRepository) ListSessions(ctx context.Context) ([]*domain.Ses
 func (r *FileHistoryRepository) DeleteSession(ctx context.Context, id string) error {
 	r.mu.Lock()
 	defer r.mu.Unlock()
-	return os.Remove(filepath.Join(r.basePath, fmt.Sprintf("%s.json", id)))
+	return os.Remove(r.sessionPath(id))
 }
 
 func (r *FileHistoryRepository) DeleteSessions(ctx context.Context, ids []string) error {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	for _, id := range ids {
-		os.Remove(filepath.Join(r.basePath, fmt.Sprintf("%s.json", id)))
+		os.Remove(r.sessionPath(id))
 	}
 	return nil
+}
+
+func (r *FileHistoryRepository) sessionPath(id string) string {
+	return filepath.Join(r.basePath, fmt.Sprintf("%s.json", id))
 }

@@ -24,7 +24,7 @@ func cors(next http.Handler) http.Handler {
 
 func main() {
 	coreURL := "http://127.0.0.1:9091"
-	cc := logic.NewCoreClient(coreURL)
+	cc := logic.NewCoreServiceClient(coreURL)
 	svc := logic.NewAgentService(cc)
 	mux := http.NewServeMux()
 	mux.HandleFunc("/api/debug/chat", func(w http.ResponseWriter, r *http.Request) {

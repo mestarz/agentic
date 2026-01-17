@@ -31,20 +31,38 @@ func (e *Engine) BuildPayload(ctx context.Context, id string, query string, mode
 	}
 
 	var traces []domain.TraceEvent
-	traces = append(traces, trace("Core", "Loading History", map[string]interface{}{"session_id": id}))
+	traces = append(traces, trace("Core", "Loading History", map[string]interface{}{
+		"session_id": id,
+		"endpoint":   "internal://history-provider",
+	}))
 
 	session, _ := e.repo.GetSession(ctx, id)
 	
-	traces = append(traces, trace("Core", "Retrieving Relevant Bits", map[string]interface{}{"query": query}))
+	traces = append(traces, trace("Core", "Retrieving Relevant Bits", map[string]interface{}{
+		"query":    query,
+		"endpoint": "internal://context-engine/retrieval",
+	}))
 	sysMsg := domain.Message{Role: domain.RoleSystem, Content: "ContextFabric Engine. Time: " + time.Now().Format("15:04:05")}
 	
 	maxTokens := 4000
 	payload, tokens, _ := e.selectMessages(ctx, session, sysMsg, maxTokens)
 	
-	traces = append(traces, trace("LLM", "Context Analysis", map[string]interface{}{"model": modelID}))
-	traces = append(traces, trace("Core", "Token Calculation", map[string]interface{}{"tokens": tokens}))
-	traces = append(traces, trace("Core", "Building Payload", map[string]interface{}{"message_count": len(payload)}))
-	traces = append(traces, trace("Core", "Context Compression", map[string]interface{}{"strategy": "sliding_window"}))
+	traces = append(traces, trace("LLM", "Context Analysis", map[string]interface{}{
+		"model":    modelID,
+		"endpoint": "internal://context-engine/analysis",
+	}))
+	traces = append(traces, trace("Core", "Token Calculation", map[string]interface{}{
+		"tokens":   tokens,
+		"endpoint": "internal://tiktoken-counter",
+	}))
+	traces = append(traces, trace("Core", "Building Payload", map[string]interface{}{
+		"message_count": len(payload),
+		"endpoint":      "internal://payload-factory",
+	}))
+	traces = append(traces, trace("Core", "Context Compression", map[string]interface{}{
+		"strategy": "sliding_window",
+		"endpoint": "internal://compression-service",
+	}))
 
 	// Add traces to the last message
 	if len(payload) > 0 {

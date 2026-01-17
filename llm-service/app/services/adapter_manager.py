@@ -42,7 +42,12 @@ class AdapterManager:
             raise ValueError(f"Model {model_id} not found")
 
         # Trace: Gateway start
-        yield {"trace": {"source": "Gateway", "target": "Adapter", "action": f"Dispatch: {model_cfg.type}"}}
+        yield {"trace": {
+            "source": "Gateway", 
+            "target": "Adapter", 
+            "action": f"Dispatch: {model_cfg.type}",
+            "data": {"endpoint": f"adapter://{model_cfg.type}"}
+        }}
 
         start_time = time.perf_counter()
         
@@ -56,7 +61,12 @@ class AdapterManager:
             module = importlib.util.module_from_spec(spec)
             spec.loader.exec_module(module)
 
-            yield {"trace": {"source": "Adapter", "target": "Adapter", "action": "Executing Custom Script"}}
+            yield {"trace": {
+                "source": "Adapter", 
+                "target": "Adapter", 
+                "action": "Executing Custom Script",
+                "data": {"endpoint": f"script://{model_id}.py"}
+            }}
 
             if asyncio.iscoroutinefunction(module.generate_stream):
                 async for chunk in module.generate_stream(request.messages, model_cfg.config):
@@ -71,15 +81,32 @@ class AdapterManager:
                 yield chunk
 
         duration = (time.perf_counter() - start_time) * 1000
-        yield {"trace": {"source": "Adapter", "target": "Gateway", "action": "Stream Complete", "data": {"duration_ms": round(duration, 2)}}}
+        yield {"trace": {
+            "source": "Adapter", 
+            "target": "Gateway", 
+            "action": "Stream Complete", 
+            "data": {
+                "duration_ms": round(duration, 2),
+                "endpoint": "stream://done"
+            }
+        }}
 
     async def _builtin_adapter(self, model_cfg: ModelAdapterConfig, request: ChatCompletionRequest):
         cfg = model_cfg.config
         api_key = cfg.get("api_key", "")
         base_url = cfg.get("base_url", "").rstrip("/")
         model_name = cfg.get("model", model_cfg.id)
+        full_endpoint = f"{base_url}/chat/completions"
 
-        yield {"trace": {"source": "Adapter", "target": "Remote Provider", "action": f"Call {model_cfg.type} API", "data": {"model": model_name}}}
+        yield {"trace": {
+            "source": "Adapter", 
+            "target": "Remote Provider", 
+            "action": f"Call {model_cfg.type} API", 
+            "data": {
+                "model": model_name,
+                "endpoint": full_endpoint
+            }
+        }}
 
         headers = {
             "Authorization": f"Bearer {api_key}",
@@ -94,7 +121,7 @@ class AdapterManager:
         first_token = True
         async with httpx.AsyncClient(timeout=60.0) as client:
             try:
-                async with client.stream("POST", f"{base_url}/chat/completions", json=payload, headers=headers) as resp:
+                async with client.stream("POST", full_endpoint, json=payload, headers=headers) as resp:
                     if resp.status_code != 200:
                         err_body = await resp.aread()
                         yield f"Error: {resp.status_code} - {err_body.decode()}"
@@ -110,7 +137,12 @@ class AdapterManager:
                                 chunk = data["choices"][0]["delta"].get("content", "")
                                 if chunk:
                                     if first_token:
-                                        yield {"trace": {"source": "Remote Provider", "target": "Adapter", "action": "First Chunk Received"}}
+                                        yield {"trace": {
+                                            "source": "Remote Provider", 
+                                            "target": "Adapter", 
+                                            "action": "First Chunk Received",
+                                            "data": {"endpoint": f"{full_endpoint} (Streaming)"}
+                                        }}
                                         first_token = False
                                     yield chunk
                             except:

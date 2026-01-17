@@ -181,7 +181,11 @@ func (s *AgentService) Chat(ctx context.Context, id, query string, agentModelID,
 
 	// 1. 先记录起点 Trace
 	trace("Frontend", "Agent", "Receive Query", query)
-	trace("Agent", "Core", "Get Optimized Context", map[string]interface{}{"query": query, "model_id": coreModelID})
+	trace("Agent", "Core", "Get Optimized Context", map[string]interface{}{
+		"query": query, 
+		"model_id": coreModelID,
+		"endpoint": "/api/v1/context",
+	})
 
 	// 2. 再执行实际调用
 	payload, err := s.coreSvc.GetOptimizedContext(ctx, id, query, coreModelID)
@@ -191,17 +195,22 @@ func (s *AgentService) Chat(ctx context.Context, id, query string, agentModelID,
 		return
 	}
 
-	// 3. 仅转发来自 Core 的“当前轮次”内部 Trace
-	// 注意：payload 的最后一条消息是刚刚构建的包含当前查询的消息，只有它的 Trace 是本轮产生的
-	if len(payload) > 0 {
-		lastMsg := payload[len(payload)-1]
-		for _, t := range lastMsg.Traces {
-			send(SSEResponse{Type: "trace", Trace: &t})
+	// 辅助函数：提取纯净的消息内容用于展示
+	cleanMessages := func(msgs []domain.Message) []map[string]string {
+		res := make([]map[string]string, len(msgs))
+		for i, m := range msgs {
+			res[i] = map[string]string{
+				"role":    m.Role,
+				"content": m.Content,
+			}
 		}
+		return res
 	}
 
-	// 4. 最后记录返回结果的 Trace
-	trace("Core", "Agent", "Return Payload", map[string]interface{}{"message_count": len(payload)})
+	trace("Core", "Agent", "Return Payload", map[string]interface{}{
+		"context":  cleanMessages(payload),
+		"endpoint": "/api/v1/context (Response)",
+	})
 
 	if len(payload) > 0 && payload[len(payload)-1].Meta != nil {
 		send(SSEResponse{Type: "meta", Meta: payload[len(payload)-1].Meta})
@@ -212,21 +221,32 @@ func (s *AgentService) Chat(ctx context.Context, id, query string, agentModelID,
 
 	save := func() {
 		if full.Len() > 0 {
-			trace("Agent", "Core", "Append Assistant Message", full.String())
+			finalContent := full.String()
+			trace("Agent", "Core", "Append Assistant Message", map[string]interface{}{
+				"content":  finalContent,
+				"endpoint": "/api/v1/messages",
+			})
 			meta := s.coreSvc.Append(context.Background(), id, domain.Message{
 				Role:      "assistant",
-				Content:   full.String(),
+				Content:   finalContent,
 				Timestamp: time.Now(),
 				Traces:    collectedTraces,
 			})
 			if meta != nil {
 				send(SSEResponse{Type: "meta", Meta: meta})
-				trace("Core", "Agent", "Updated Stats", meta)
+				trace("Core", "Agent", "Updated Stats", map[string]interface{}{
+					"meta":     meta,
+					"endpoint": "/api/v1/messages (Response)",
+				})
 			}
 		}
 	}
 
-	trace("Agent", "Gateway", "Start Streaming", map[string]interface{}{"model": agentModelID})
+	trace("Agent", "Gateway", "Start Streaming", map[string]interface{}{
+		"model":    agentModelID,
+		"prompt":   cleanMessages(payload),
+		"endpoint": "/v1/chat/completions",
+	})
 
 	go func() {
 		defer close(out)
@@ -259,5 +279,12 @@ func (s *AgentService) Chat(ctx context.Context, id, query string, agentModelID,
 	if err != nil {
 		send(SSEResponse{Type: "chunk", Content: "Error from LLM Gateway: " + err.Error()})
 	}
+	
+	// 流式正常结束，发送汇总 Trace
+	trace("Gateway", "Agent", "Stream Complete", map[string]interface{}{
+		"content":  full.String(),
+		"endpoint": "stream://done",
+	})
+	
 	close(internal)
 }

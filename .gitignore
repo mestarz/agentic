@@ -48,10 +48,10 @@ venv/
 env/
 
 # Python
-__pycache__/
-*.py[cod]
-*$py.class
-*.so
+**/__pycache__/
+**/*.py[cod]
+**/*$py.class
+**/*.so
 .Python
 build/
 develop-eggs/

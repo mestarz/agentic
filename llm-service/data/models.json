@@ -1,0 +1,13 @@
+{
+  "mock-model": {
+    "id": "mock-model",
+    "name": "Deepseek-Chat",
+    "type": "deepseek",
+    "script_content": null,
+    "config": {
+      "base_url": "https://api.deepseek.com",
+      "api_key": "sk-af28e86c1b3443588a9175502d788732",
+      "model": "deepseek-chat"
+    }
+  }
+}

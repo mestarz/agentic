@@ -34,12 +34,12 @@ func (h *ContextHandler) AppendMessage(w http.ResponseWriter, r *http.Request) {
 }
 func (h *ContextHandler) GetContext(w http.ResponseWriter, r *http.Request) {
 	var req struct {
-		SessionID string           `json:"session_id"`
-		Query     string           `json:"query"`
-		Config    domain.LLMConfig `json:"config"`
+		SessionID string `json:"session_id"`
+		Query     string `json:"query"`
+		ModelID   string `json:"model_id"`
 	}
 	json.NewDecoder(r.Body).Decode(&req)
-	msgs, _ := h.svc.GetOptimizedContext(r.Context(), req.SessionID, req.Query, req.Config)
+	msgs, _ := h.svc.GetOptimizedContext(r.Context(), req.SessionID, req.Query, req.ModelID)
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(map[string]interface{}{"messages": msgs})
 }

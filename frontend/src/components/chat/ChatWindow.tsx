@@ -39,9 +39,9 @@ export function ChatWindow({
       <header className="h-16 border-b border-slate-100 flex items-center justify-between px-6 bg-white/50 backdrop-blur-md z-10 shadow-sm">
         <div className="flex items-center gap-4">
           <div className="flex items-center gap-2 text-[9px] font-black text-slate-400 uppercase">
-            <Zap size={10} /> <span className="text-indigo-600">{appConfigs.agent.provider}</span>
+            <Zap size={10} /> <span className="text-indigo-600">{appConfigs.agentModelID}</span>
             <div className="w-[1px] h-3 bg-slate-200 mx-1"></div>
-            <Cpu size={10} /> <span className="text-emerald-600">{appConfigs.core.provider}</span>
+            <Cpu size={10} /> <span className="text-emerald-600">{appConfigs.coreModelID}</span>
           </div>
           <div className="h-4 w-[1px] bg-slate-200"></div>
           <h2 className="text-sm font-semibold text-slate-700">{selectedId || '实验性控制台'}</h2>
@@ -80,7 +80,7 @@ export function ChatWindow({
               <Square size={18} fill="currentColor" />
             </button>
           ) : (
-            <button disabled={!input.trim() || (!appConfigs.agent.api_key && appConfigs.agent.provider !== 'mock')} onClick={handleSend} className="p-3 bg-indigo-600 text-white rounded-xl hover:bg-indigo-700 shadow-lg flex items-center justify-center min-w-[50px] transition-all disabled:opacity-30">
+            <button disabled={!input.trim()} onClick={handleSend} className="p-3 bg-indigo-600 text-white rounded-xl hover:bg-indigo-700 shadow-lg flex items-center justify-center min-w-[50px] transition-all disabled:opacity-30">
               <Send size={18} />
             </button>
           )}

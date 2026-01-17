@@ -72,8 +72,8 @@ export function useChat({
         body: JSON.stringify({
           session_id: sessionId,
           query: userMsg.content,
-          agent_config: appConfigs.agent,
-          core_config: appConfigs.core,
+          agent_model_id: appConfigs.agentModelID,
+          core_model_id: appConfigs.coreModelID,
         }),
       });
 

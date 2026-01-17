@@ -1,0 +1,80 @@
+from fastapi import APIRouter, HTTPException, Request
+from fastapi.responses import StreamingResponse, JSONResponse
+from app.schemas import ChatCompletionRequest, ModelAdapterConfig, ModelListResponse
+from app.services.adapter_manager import manager
+import json
+import time
+
+router = APIRouter()
+
+@router.get("/models", response_model=ModelListResponse)
+async def list_models():
+    models = manager.list_models()
+    return ModelListResponse(data=models)
+
+@router.post("/models")
+async def register_model(model: ModelAdapterConfig):
+    manager.save_model(model)
+    return {"status": "success", "model_id": model.id}
+
+@router.post("/chat/completions")
+async def chat_completions(request: ChatCompletionRequest):
+    try:
+        if request.stream:
+            return StreamingResponse(
+                stream_generator(request),
+                media_type="text/event-stream"
+            )
+        else:
+            content = ""
+            async for item in manager.generate(request):
+                if isinstance(item, str):
+                    content += item
+            
+            return {
+                "id": f"chatcmpl-{int(time.time())}",
+                "object": "chat.completion",
+                "created": int(time.time()),
+                "model": request.model,
+                "choices": [{"message": {"role": "assistant", "content": content}, "finish_reason": "stop"}]
+            }
+
+    except ValueError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+async def stream_generator(request: ChatCompletionRequest):
+    try:
+        async for chunk in manager.generate(request):
+            if isinstance(chunk, dict) and "trace" in chunk:
+                # Inject trace as a special field in the OpenAI-compatible chunk or a separate event
+                # Here we embed it into the data object
+                data = {
+                    "id": f"trace-{int(time.time())}",
+                    "object": "chat.completion.chunk",
+                    "created": int(time.time()),
+                    "model": request.model,
+                    "choices": [],
+                    "trace": chunk["trace"]
+                }
+                yield f"data: {json.dumps(data)}\n\n"
+            elif isinstance(chunk, str):
+                data = {
+                    "id": f"chatcmpl-{int(time.time())}",
+                    "object": "chat.completion.chunk",
+                    "created": int(time.time()),
+                    "model": request.model,
+                    "choices": [
+                        {
+                            "delta": {"content": chunk},
+                            "finish_reason": None
+                        }
+                    ]
+                }
+                yield f"data: {json.dumps(data)}\n\n"
+
+
+    except Exception as e:
+        err_data = {"error": str(e)}
+        yield f"data: {json.dumps(err_data)}\n\n"

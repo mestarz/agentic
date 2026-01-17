@@ -20,14 +20,23 @@ func NewEngine(repo *persistence.FileHistoryRepository) *Engine {
 	return &Engine{repo: repo, tke: tke}
 }
 
-func (e *Engine) BuildPayload(ctx context.Context, id string, query string, cfg domain.LLMConfig) ([]domain.Message, error) {
+func (e *Engine) BuildPayload(ctx context.Context, id string, query string, modelID string) ([]domain.Message, error) {
 	session, _ := e.repo.GetSession(ctx, id)
 	sysMsg := domain.Message{Role: domain.RoleSystem, Content: "ContextFabric Engine. Time: " + time.Now().Format("15:04:05")}
 	
 	maxTokens := 4000
 	payload, tokens, _ := e.selectMessages(ctx, session, sysMsg, maxTokens)
 	
-	payload[len(payload)-1].Meta = map[string]interface{}{"tokens_total": tokens, "tokens_max": maxTokens}
+	// Add traces to the last message (usually the user query or system message)
+	if len(payload) > 0 {
+		payload[len(payload)-1].Traces = append(payload[len(payload)-1].Traces, 
+			domain.TraceEvent{Source: "Core", Target: "Core", Action: "Loading History", Data: map[string]interface{}{"session_id": id}, Timestamp: time.Now()},
+			domain.TraceEvent{Source: "Core", Target: "LLM", Action: "Context Analysis", Data: map[string]interface{}{"model": modelID}, Timestamp: time.Now()},
+			domain.TraceEvent{Source: "Core", Target: "Core", Action: "Token Calculation", Data: map[string]interface{}{"tokens": tokens}, Timestamp: time.Now()},
+			domain.TraceEvent{Source: "Core", Target: "Core", Action: "Context Compression", Data: map[string]interface{}{"strategy": "sliding_window"}, Timestamp: time.Now()},
+		)
+		payload[len(payload)-1].Meta = map[string]interface{}{"tokens_total": tokens, "tokens_max": maxTokens}
+	}
 	return payload, nil
 }
 
@@ -76,12 +85,12 @@ func (s *Service) AppendMessage(ctx context.Context, id string, msg domain.Messa
 	s.historySvc.UpdateLastMessageMeta(ctx, id, meta)
 	return meta, nil
 }
-func (s *Service) GetOptimizedContext(ctx context.Context, id, query string, cfg domain.LLMConfig) ([]domain.Message, error) {
+func (s *Service) GetOptimizedContext(ctx context.Context, id, query string, modelID string) ([]domain.Message, error) {
 	s.historySvc.GetOrCreateSession(ctx, id, "auto")
 	userMsg := domain.Message{Role: domain.RoleUser, Content: query, Timestamp: time.Now()}
 	s.historySvc.Append(ctx, id, userMsg)
 	
-	payload, err := s.engine.BuildPayload(ctx, id, query, cfg)
+	payload, err := s.engine.BuildPayload(ctx, id, query, modelID)
 	if err == nil && len(payload) > 0 {
 		s.historySvc.UpdateLastMessageMeta(ctx, id, payload[len(payload)-1].Meta)
 	}

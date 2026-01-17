@@ -9,7 +9,18 @@ mkdir -p "$LOG_DIR" "$BIN_DIR"
 unset http_proxy https_proxy all_proxy
 export NO_PROXY="localhost,127.0.0.1,0.0.0.0"
 
-echo "正在启动 ContextFabric 完全隔离版 (Core + Agent)..."
+echo "正在启动 ContextFabric 完全隔离版 (Core + Agent + LLM Gateway)..."
+
+# 0. 启动 LLM Gateway (Python)
+echo "启动 LLM Gateway 服务..."
+cd "$ROOT_DIR/llm-service"
+# 尝试创建并激活虚拟环境 (可选)
+if [ ! -d "venv" ]; then
+    python3 -m venv venv
+    ./venv/bin/pip install -r requirements.txt
+fi
+nohup ./venv/bin/python3 -m uvicorn app.main:app --host 0.0.0.0 --port 8000 > "$LOG_DIR/llm-gateway.log" 2>&1 &
+echo $! > "$LOG_DIR/llm-gateway.pid"
 
 # 1. 编译并启动 Core
 echo "编译 Core 服务..."
@@ -34,7 +45,7 @@ echo $! > "$LOG_DIR/frontend.pid"
 echo "---------------------------------------"
 echo "系统启动指令已发出！"
 sleep 3
-ss -tulpn | grep -E '9090|9091|5173'
+ss -tulpn | grep -E '9090|9091|5173|8000'
 echo "---------------------------------------"
 echo "Web 控制台访问地址: http://localhost:5173"
 echo "---------------------------------------"

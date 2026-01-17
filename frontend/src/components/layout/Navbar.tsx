@@ -1,8 +1,8 @@
-import { Server, Activity, BookOpen, Settings } from 'lucide-react';
+import { Server, Activity, BookOpen, Settings, Box } from 'lucide-react';
 
 interface NavbarProps {
-  view: 'chat' | 'docs' | 'settings';
-  setView: (view: 'chat' | 'docs' | 'settings') => void;
+  view: 'chat' | 'docs' | 'settings' | 'models';
+  setView: (view: 'chat' | 'docs' | 'settings' | 'models') => void;
 }
 
 export function Navbar({ view, setView }: NavbarProps) {
@@ -13,6 +13,9 @@ export function Navbar({ view, setView }: NavbarProps) {
       </div>
       <button onClick={() => setView('chat')} className={`p-3 rounded-xl transition-all ${view === 'chat' ? 'bg-indigo-600 text-white shadow-lg' : 'text-slate-400 hover:text-slate-200'}`}>
         <Activity size={24} />
+      </button>
+      <button onClick={() => setView('models')} className={`p-3 rounded-xl transition-all ${view === 'models' ? 'bg-indigo-600 text-white shadow-lg' : 'text-slate-400 hover:text-slate-200'}`}>
+        <Box size={24} />
       </button>
       <button onClick={() => setView('docs')} className={`p-3 rounded-xl transition-all ${view === 'docs' ? 'bg-indigo-600 text-white shadow-lg' : 'text-slate-400 hover:text-slate-200'}`}>
         <BookOpen size={24} />

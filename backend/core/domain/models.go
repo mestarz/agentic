@@ -38,10 +38,3 @@ type SessionSummary struct {
 	UpdatedAt time.Time `json:"updated_at"`
 	MsgCount  int       `json:"msg_count"`
 }
-
-type LLMConfig struct {
-	Provider string `json:"provider"`
-	BaseURL  string `json:"base_url"`
-	APIKey   string `json:"api_key"`
-	Model    string `json:"model"`
-}

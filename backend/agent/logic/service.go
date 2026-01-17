@@ -153,10 +153,6 @@ type SSEResponse struct {
 }
 
 func (s *AgentService) Chat(ctx context.Context, id, query string, agentModelID, coreModelID string, out chan<- string) {
-	payload, err := s.coreSvc.GetOptimizedContext(ctx, id, query, coreModelID)
-	if err != nil {
-		return
-	}
 	var collectedTraces []domain.TraceEvent
 
 	send := func(resp SSEResponse) {
@@ -183,16 +179,29 @@ func (s *AgentService) Chat(ctx context.Context, id, query string, agentModelID,
 		})
 	}
 
+	// 1. 先记录起点 Trace
 	trace("Frontend", "Agent", "Receive Query", query)
 	trace("Agent", "Core", "Get Optimized Context", map[string]interface{}{"query": query, "model_id": coreModelID})
-	trace("Core", "Agent", "Return Payload", payload)
 
-	// Forward traces from core payload
-	for _, msg := range payload {
-		for _, t := range msg.Traces {
+	// 2. 再执行实际调用
+	payload, err := s.coreSvc.GetOptimizedContext(ctx, id, query, coreModelID)
+	if err != nil {
+		trace("Agent", "Frontend", "Error", err.Error())
+		close(out)
+		return
+	}
+
+	// 3. 仅转发来自 Core 的“当前轮次”内部 Trace
+	// 注意：payload 的最后一条消息是刚刚构建的包含当前查询的消息，只有它的 Trace 是本轮产生的
+	if len(payload) > 0 {
+		lastMsg := payload[len(payload)-1]
+		for _, t := range lastMsg.Traces {
 			send(SSEResponse{Type: "trace", Trace: &t})
 		}
 	}
+
+	// 4. 最后记录返回结果的 Trace
+	trace("Core", "Agent", "Return Payload", map[string]interface{}{"message_count": len(payload)})
 
 	if len(payload) > 0 && payload[len(payload)-1].Meta != nil {
 		send(SSEResponse{Type: "meta", Meta: payload[len(payload)-1].Meta})

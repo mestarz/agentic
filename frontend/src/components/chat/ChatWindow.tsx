@@ -35,7 +35,7 @@ export function ChatWindow({
   }, [currentSession?.messages]);
 
   return (
-    <main className="flex-1 flex flex-col min-w-0 bg-white">
+    <main className="flex-1 h-full flex flex-col min-w-0 bg-white">
       <header className="h-16 border-b border-slate-100 flex items-center justify-between px-6 bg-white/50 backdrop-blur-md z-10 shadow-sm">
         <div className="flex items-center gap-4">
           <div className="flex items-center gap-2 text-[9px] font-black text-slate-400 uppercase">
@@ -59,7 +59,7 @@ export function ChatWindow({
           )}
         </div>
       </header>
-      <div ref={scrollRef} className="flex-1 overflow-y-auto p-8 space-y-8 custom-scrollbar">
+      <div ref={scrollRef} className="flex-1 min-h-0 overflow-y-auto p-8 space-y-8 custom-scrollbar">
         {currentSession?.messages.map((m, i) => (
           <div key={i} className={`flex ${m.role === 'user' ? 'justify-end' : 'justify-start'}`}>
             <div 

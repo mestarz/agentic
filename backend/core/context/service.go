@@ -21,20 +21,34 @@ func NewEngine(repo *persistence.FileHistoryRepository) *Engine {
 }
 
 func (e *Engine) BuildPayload(ctx context.Context, id string, query string, modelID string) ([]domain.Message, error) {
+	now := time.Now()
+	trace := func(target, action string, data map[string]interface{}) domain.TraceEvent {
+		// 确保每个 trace 至少间隔 1 微秒，保证前端排序一致
+		now = now.Add(time.Microsecond)
+		return domain.TraceEvent{
+			Source: "Core", Target: target, Action: action, Data: data, Timestamp: now,
+		}
+	}
+
+	var traces []domain.TraceEvent
+	traces = append(traces, trace("Core", "Loading History", map[string]interface{}{"session_id": id}))
+
 	session, _ := e.repo.GetSession(ctx, id)
+	
+	traces = append(traces, trace("Core", "Retrieving Relevant Bits", map[string]interface{}{"query": query}))
 	sysMsg := domain.Message{Role: domain.RoleSystem, Content: "ContextFabric Engine. Time: " + time.Now().Format("15:04:05")}
 	
 	maxTokens := 4000
 	payload, tokens, _ := e.selectMessages(ctx, session, sysMsg, maxTokens)
 	
-	// Add traces to the last message (usually the user query or system message)
+	traces = append(traces, trace("LLM", "Context Analysis", map[string]interface{}{"model": modelID}))
+	traces = append(traces, trace("Core", "Token Calculation", map[string]interface{}{"tokens": tokens}))
+	traces = append(traces, trace("Core", "Building Payload", map[string]interface{}{"message_count": len(payload)}))
+	traces = append(traces, trace("Core", "Context Compression", map[string]interface{}{"strategy": "sliding_window"}))
+
+	// Add traces to the last message
 	if len(payload) > 0 {
-		payload[len(payload)-1].Traces = append(payload[len(payload)-1].Traces, 
-			domain.TraceEvent{Source: "Core", Target: "Core", Action: "Loading History", Data: map[string]interface{}{"session_id": id}, Timestamp: time.Now()},
-			domain.TraceEvent{Source: "Core", Target: "LLM", Action: "Context Analysis", Data: map[string]interface{}{"model": modelID}, Timestamp: time.Now()},
-			domain.TraceEvent{Source: "Core", Target: "Core", Action: "Token Calculation", Data: map[string]interface{}{"tokens": tokens}, Timestamp: time.Now()},
-			domain.TraceEvent{Source: "Core", Target: "Core", Action: "Context Compression", Data: map[string]interface{}{"strategy": "sliding_window"}, Timestamp: time.Now()},
-		)
+		payload[len(payload)-1].Traces = append(payload[len(payload)-1].Traces, traces...)
 		payload[len(payload)-1].Meta = map[string]interface{}{"tokens_total": tokens, "tokens_max": maxTokens}
 	}
 	return payload, nil

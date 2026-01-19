@@ -77,7 +77,7 @@ class AdapterManager:
         
         # 1. 如果是自定义脚本类型
         if model_cfg.type == "custom" and model_cfg.script_content:
-            # ... (omitted for brevity, keep existing logic) ...
+            yield "--> [System] Loading custom script...\n"
             print(f"DEBUG: Executing custom script for {model_id}", flush=True)
             try:
                 script_path = os.path.join(self.scripts_dir, f"{model_id}.py")
@@ -88,28 +88,36 @@ class AdapterManager:
                 module = importlib.util.module_from_spec(spec)
                 spec.loader.exec_module(module)
 
+                yield "--> [System] Script loaded. Executing generate_stream...\n"
                 print("DEBUG: Calling generate_stream in script", flush=True)
-                if inspect.isasyncgenfunction(module.generate_stream):
-                    async for chunk in module.generate_stream(request.messages, model_cfg.config):
-                        yield chunk
-                elif inspect.isgeneratorfunction(module.generate_stream):
-                    for chunk in module.generate_stream(request.messages, model_cfg.config):
-                        yield chunk
-                else:
-                    res = module.generate_stream(request.messages, model_cfg.config)
-                    if inspect.isasyncgen(res):
-                        async for chunk in res:
+                
+                if hasattr(module, 'generate_stream'):
+                    func = module.generate_stream
+                    if inspect.isasyncgenfunction(func):
+                        async for chunk in func(request.messages, model_cfg.config):
                             yield chunk
-                    elif inspect.isgenerator(res):
-                        for chunk in res:
+                    elif inspect.isgeneratorfunction(func):
+                        for chunk in func(request.messages, model_cfg.config):
                             yield chunk
                     else:
-                        yield res
+                        # Handle regular function returning generator/async generator
+                        res = func(request.messages, model_cfg.config)
+                        if inspect.isasyncgen(res):
+                            async for chunk in res:
+                                yield chunk
+                        elif inspect.isgenerator(res):
+                            for chunk in res:
+                                yield chunk
+                        else:
+                            yield str(res)
+                else:
+                    yield "--> [System] Error: 'generate_stream' function not found in script.\n"
                 
                 print("DEBUG: Script execution finished", flush=True)
             except Exception as e:
+                import traceback
                 print(f"DEBUG: Error in custom script execution: {e}", flush=True)
-                yield f"Error executing script: {str(e)}"
+                yield f"--> [System] Execution Error:\n{traceback.format_exc()}\n"
         
         # 2. 如果是标准厂商类型
         else:

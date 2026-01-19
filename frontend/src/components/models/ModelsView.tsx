@@ -337,6 +337,14 @@ export function ModelsView({ onBack }: { onBack: () => void }) {
                       className="flex-1 bg-transparent text-emerald-400 p-8 font-mono text-sm outline-none resize-none leading-relaxed"
                       value={selectedModel.script_content || ''}
                       onChange={e => setSelectedModel({...selectedModel, script_content: e.target.value})}
+                      onKeyDown={e => {
+                        if (e.key === 'Tab') {
+                          e.preventDefault();
+                          // 使用 insertText 命令插入 4 个空格
+                          // 这种方式会自动处理光标位置并保留撤销历史
+                          document.execCommand('insertText', false, '    ');
+                        }
+                      }}
                       spellCheck={false}
                     />
                   </div>

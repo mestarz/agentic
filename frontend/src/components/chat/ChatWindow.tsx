@@ -14,7 +14,7 @@ interface ChatWindowProps {
   handleSend: () => void;
   handleStop: () => void;
   loading: boolean;
-  traces?: TraceEvent[]; // [NEW] Accept traces for real-time display
+  logs?: string[]; // [NEW] Accept logs for real-time display
 }
 
 export function ChatWindow({
@@ -28,7 +28,7 @@ export function ChatWindow({
   handleSend,
   handleStop,
   loading,
-  traces = []
+  logs = []
 }: ChatWindowProps) {
   const scrollRef = useRef<HTMLDivElement>(null);
   const terminalScrollRef = useRef<HTMLDivElement>(null);
@@ -43,23 +43,7 @@ export function ChatWindow({
     if (isTerminalExpanded && terminalScrollRef.current) {
         terminalScrollRef.current.scrollTop = terminalScrollRef.current.scrollHeight;
     }
-  }, [traces, isTerminalExpanded]);
-
-  // 辅助函数：根据 action 类型汉化显示
-  const translateAction = (action: string) => {
-    const map: Record<string, string> = {
-        'Receive Query': '接收用户请求',
-        'Get Optimized Context': '开始获取上下文',
-        'Return Payload': 'Core 返回结果',
-        'Start Streaming': '启动模型流式传输',
-        'Append Assistant Message': '保存助手回复',
-        'Updated Stats': '更新统计信息',
-        'Model Request': '发送模型请求',
-        'Model Processing': '模型推理中',
-        'Model Response': '接收模型响应'
-    };
-    return map[action] || action;
-  };
+  }, [logs, isTerminalExpanded]);
 
   return (
     <main className="flex-1 h-full flex flex-col min-w-0 bg-white overflow-hidden">
@@ -117,7 +101,7 @@ export function ChatWindow({
           </div>
         </div>
 
-        {/* System Observer Terminal (Light Style) */}
+        {/* System Observer Terminal (Log Stream Style) */}
         <div className={`bg-white border-t border-slate-100 transition-all duration-300 flex flex-col ${isTerminalExpanded ? 'h-64' : 'h-[36px]'}`}>
           <div 
             className="px-6 h-[36px] flex items-center justify-between cursor-pointer hover:bg-slate-50 transition-colors border-b border-slate-50"
@@ -126,10 +110,10 @@ export function ChatWindow({
             <div className="flex items-center gap-3">
               <Terminal size={14} className={loading ? 'text-indigo-500 animate-pulse' : 'text-slate-400'} />
               <span className="text-[10px] font-black uppercase tracking-widest text-slate-500">系统轨迹监测</span>
-              {loading && <span className="text-[9px] text-indigo-500 font-bold animate-pulse">PROCESSING...</span>}
+              {loading && <span className="text-[9px] text-indigo-500 font-bold animate-pulse">STREAMING...</span>}
             </div>
             <div className="flex items-center gap-4">
-              {traces.length > 0 && <span className="text-[9px] font-mono text-slate-400">{traces.length} EVENTS</span>}
+              {logs.length > 0 && <span className="text-[9px] font-mono text-slate-400">{logs.length} LINES</span>}
               <div className="text-slate-300">{isTerminalExpanded ? <ChevronDown size={14} /> : <ChevronUp size={14} />}</div>
             </div>
           </div>
@@ -137,19 +121,20 @@ export function ChatWindow({
             ref={terminalScrollRef}
             className="flex-1 overflow-y-auto p-4 font-mono text-[10px] selection:bg-indigo-500/10 light-terminal-scrollbar bg-slate-50/50"
           >
-            {traces.length === 0 ? (
-              <div className="text-slate-300 italic">等待交互产生的系统轨迹...</div>
+            {logs.length === 0 ? (
+              <div className="text-slate-300 italic">等待交互产生的系统日志...</div>
             ) : (
-              <div className="space-y-1.5">
-                {traces.map((t, idx) => (
-                  <div key={idx} className="flex gap-3 animate-in fade-in slide-in-from-bottom-1 duration-200">
-                    <span className="text-slate-300 shrink-0">[{new Date(t.timestamp).toLocaleTimeString()}]</span>
-                    <span className="text-slate-500 font-bold shrink-0">{t.source} -&gt; {t.target}:</span>
-                    <span className={t.action.includes('Error') ? 'text-rose-500' : 'text-indigo-600'}>{translateAction(t.action)}</span>
-                    {t.data && <span className="text-slate-400 truncate opacity-70 italic">({typeof t.data === 'string' ? t.data : JSON.stringify(t.data)})</span>}
+              <div className="space-y-1">
+                {logs.map((log, idx) => (
+                  <div key={idx} className={`animate-in fade-in slide-in-from-bottom-1 duration-200 ${
+                    log.includes('[Error]') ? 'text-rose-500 font-bold' : 
+                    log.includes('[Warning]') ? 'text-amber-500' :
+                    log.includes('[Trace]') ? 'text-indigo-600' :
+                    log.startsWith('>>>') ? 'text-slate-400 italic' : 'text-slate-600'
+                  }`}>
+                    {log}
                   </div>
                 ))}
-                <div id="chat-terminal-end"></div>
               </div>
             )}
           </div>

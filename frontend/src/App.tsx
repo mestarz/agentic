@@ -34,7 +34,7 @@ function App() {
     toggleSelectAll
   } = useSessions();
 
-  const { input, setInput, loading, handleSend, handleStop, liveTraces } = useChat({
+  const { input, setInput, loading, handleSend, handleStop, liveLogs } = useChat({
     currentSession,
     setCurrentSession,
     setSelectedId,
@@ -99,7 +99,7 @@ function App() {
                 handleSend={handleSend}
                 handleStop={handleStop}
                 loading={loading}
-                traces={liveTraces}
+                logs={liveLogs}
               />
             </div>
           </div>

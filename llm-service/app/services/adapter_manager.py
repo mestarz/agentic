@@ -154,7 +154,9 @@ class AdapterManager:
             "stream": True
         }
 
-        async with httpx.AsyncClient(timeout=60.0) as client:
+        # Set explicit timeouts: 10s for connection, 60s for read/write/pool
+        timeout = httpx.Timeout(60.0, connect=10.0)
+        async with httpx.AsyncClient(timeout=timeout) as client:
             try:
                 async with client.stream("POST", full_endpoint, json=payload, headers=headers) as resp:
                     if resp.status_code != 200:
@@ -175,6 +177,6 @@ class AdapterManager:
                             except:
                                 continue
             except Exception as e:
-                yield f"Connection Error: {str(e)}"
+                yield f"Connection Error: [{type(e).__name__}] {str(e)}"
 
 manager = AdapterManager()

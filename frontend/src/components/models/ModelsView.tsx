@@ -124,7 +124,11 @@ export function ModelsView({ onBack }: { onBack: () => void }) {
           throw new Error(`连接失败 (HTTP ${res.status}): ${text}`);
       }
 
-      setTestLogs(prev => [...prev, '> 连通性检查通过。[Step 2/2] 正在等待模型流式回复...']);
+      setTestLogs(prev => [
+        ...prev, 
+        '> 连通性检查通过。',
+        '> [Step 2/2] 正在等待模型流式回复...'
+      ]);
       
       const reader = res.body?.getReader();
       const decoder = new TextDecoder();
@@ -157,13 +161,18 @@ export function ModelsView({ onBack }: { onBack: () => void }) {
                          });
                      }
                  } catch {}
+             } else if (line.trim() !== '' && !line.startsWith(':')) {
+                 // Capture non-SSE lines (potential errors from gateway/provider)
+                 // Ignore SSE comments starting with ':'
+                 setTestLogs(prev => [...prev, `> [Raw]: ${line.substring(0, 100)}${line.length > 100 ? '...' : ''}`]);
              }
           }
         }
       }
       setTestLogs(prev => [...prev, '> Test finished.']);
     } catch (e: any) {
-      setTestLogs(prev => [...prev, `> Error: ${e.message}`]);
+      setTestLogs(prev => [...prev, `> Error: ${e.message || 'Stream interrupted'}`]);
+      console.error(e);
     } finally {
       setIsTesting(false);
     }

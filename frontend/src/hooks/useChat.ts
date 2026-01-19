@@ -43,6 +43,8 @@ export function useChat({
     abortControllerRef.current = abortController;
 
     const sessionId = currentSession?.id || `session-${Math.random().toString(36).substring(7)}`;
+    addLog(`>>> [Debug] 请求参数 - Agent Model: ${appConfigs.agentModelID}, Core Engine: ${appConfigs.coreModelID}`);
+    
     const userMsg: Message = {
       role: "user",
       content: input,

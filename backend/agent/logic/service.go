@@ -195,9 +195,10 @@ func (s *AgentService) Chat(ctx context.Context, id, query string, agentModelID,
 		return
 	}
 
-	// 提取并转发 Core 内部产生的 Pipeline Traces (如 HistoryLoader, TokenLimitPass 等)
-	for _, msg := range payload {
-		for _, t := range msg.Traces {
+	// 提取并转发 Core 内部产生的 Pipeline Traces (仅针对当前请求产生的最新消息)
+	if len(payload) > 0 {
+		lastMsg := payload[len(payload)-1]
+		for _, t := range lastMsg.Traces {
 			tCopy := t
 			send(SSEResponse{Type: "trace", Trace: &tCopy})
 		}

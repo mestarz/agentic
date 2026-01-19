@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Maximize2 } from 'lucide-react';
 import { useConfig } from './hooks/useConfig';
 import { useSessions } from './hooks/useSessions';
@@ -19,6 +19,32 @@ function App() {
 
   const { appConfigs, setAppConfigs } = useConfig();
   
+  // [NEW] 全局配置自愈逻辑：启动时自动对齐可用模型
+  useEffect(() => {
+    fetch('/api/models/models')
+      .then(res => res.json())
+      .then(data => {
+        const models = data.data || [];
+        if (models.length > 0) {
+          setAppConfigs(prev => {
+            const next = { ...prev };
+            let changed = false;
+            // 如果是默认的 mock-model 或模型已不存在，则自动选中第一个
+            if (prev.agentModelID === 'mock-model' || !models.find(m => m.id === prev.agentModelID)) {
+              next.agentModelID = models[0].id;
+              changed = true;
+            }
+            if (prev.coreModelID === 'mock-model' || !models.find(m => m.id === prev.coreModelID)) {
+              next.coreModelID = models[0].id;
+              changed = true;
+            }
+            return changed ? next : prev;
+          });
+        }
+      })
+      .catch(e => console.error("Auto-sync failed", e));
+  }, []); // 仅在应用挂载时运行一次
+
   const {
     sessions,
     selectedId,

@@ -70,3 +70,4 @@ share/python-wheels/
 .installed.cfg
 *.egg
 MANIFEST
+llm-service/data/models.json

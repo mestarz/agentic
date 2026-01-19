@@ -27,8 +27,8 @@ export function ModelsView({ onBack }: { onBack: () => void }) {
     try {
       const resp = await fetch('/api/models/models');
       const data = await resp.json();
-      setModels(data.data);
-      if (data.data.length > 0 && !selectedModel) {
+      setModels(data.data || []);
+      if (data.data && data.data.length > 0 && !selectedModel) {
         setSelectedModel(data.data[0]);
         setOriginalModel(data.data[0]);
       }
@@ -47,14 +47,12 @@ export function ModelsView({ onBack }: { onBack: () => void }) {
         body: JSON.stringify(selectedModel)
       });
       await fetchModels();
-      if (selectedModel) {
-        setOriginalModel(selectedModel);
-        setUnsavedIds(prev => {
-          const next = new Set(prev);
-          next.delete(selectedModel.id);
-          return next;
-        });
-      }
+      setOriginalModel(selectedModel);
+      setUnsavedIds(prev => {
+        const next = new Set(prev);
+        next.delete(selectedModel.id);
+        return next;
+      });
     } catch (e) {
       alert("保存失败");
     } finally {
@@ -100,7 +98,6 @@ export function ModelsView({ onBack }: { onBack: () => void }) {
 
   const runDiagnostics = async () => {
     if (!selectedModel) return;
-    
     setIsTerminalExpanded(true);
 
     if (isModified) {
@@ -126,14 +123,12 @@ export function ModelsView({ onBack }: { onBack: () => void }) {
     }
     
     setIsTesting(true);
-    const targetInfo = selectedModel.config.base_url 
-        ? selectedModel.config.base_url 
-        : (selectedModel.type === 'custom' ? '自定义脚本执行环境' : '默认端点');
+    const targetInfo = selectedModel.config.base_url || '自定义逻辑地址';
         
     setTestLogs(prev => [
         ...prev,
         `> 正在初始化诊断测试: ${selectedModel.id}...`,
-        `> [Step 1/2] 连通性检查: 正在探测 ${targetInfo}...`
+        `> [Step 1/2] 发起请求: ${targetInfo}...`
     ]);
 
     try {
@@ -142,7 +137,7 @@ export function ModelsView({ onBack }: { onBack: () => void }) {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           model: selectedModel.id,
-          messages: [{ role: 'user', content: 'Hello! Just testing connection.' }],
+          messages: [{ role: 'user', content: 'Hello!' }],
           stream: true,
           is_diagnostic: true
         })
@@ -153,11 +148,7 @@ export function ModelsView({ onBack }: { onBack: () => void }) {
           throw new Error(`连接失败 (HTTP ${res.status}): ${text}`);
       }
 
-      setTestLogs(prev => [
-        ...prev, 
-        '> 连通性检查通过。',
-        '> [Step 2/2] 正在等待模型流式回复...'
-      ]);
+      setTestLogs(prev => [...prev, '> 连接建立成功。[Step 2/2] 等待回复...']);
       
       const reader = res.body?.getReader();
       const decoder = new TextDecoder();
@@ -169,10 +160,8 @@ export function ModelsView({ onBack }: { onBack: () => void }) {
           if (done) break;
           const chunk = decoder.decode(value, { stream: true });
           buffer += chunk;
-          
           const lines = buffer.split('\n');
           buffer = lines.pop() || '';
-          
           for (const line of lines) {
              if (line.startsWith('data: ')) {
                  const dataStr = line.slice(6).trim();
@@ -183,9 +172,7 @@ export function ModelsView({ onBack }: { onBack: () => void }) {
                      if (content) {
                          setTestLogs(prev => {
                              const last = prev[prev.length - 1];
-                             if (last && last.startsWith('> Rcv: ')) {
-                                 return [...prev.slice(0, -1), last + content];
-                             }
+                             if (last && last.startsWith('> Rcv: ')) return [...prev.slice(0, -1), last + content];
                              return [...prev, `> Rcv: ${content}`];
                          });
                      }
@@ -193,14 +180,14 @@ export function ModelsView({ onBack }: { onBack: () => void }) {
              } else if (line.trim() !== '' && !line.startsWith(':')) {
                  // Capture non-SSE lines (potential errors from gateway/provider)
                  // Ignore SSE comments starting with ':'
-                 setTestLogs(prev => [...prev, `> [Raw]: ${line.substring(0, 100)}${line.length > 100 ? '...' : ''}`]);
+                 setTestLogs(prev => [...prev, `> [Raw]: ${line.substring(0, 150)}`]);
              }
           }
         }
       }
-      setTestLogs(prev => [...prev, '> Test finished.']);
+      setTestLogs(prev => [...prev, '> 测试结束。']);
     } catch (e: any) {
-      setTestLogs(prev => [...prev, `> Error: ${e.message || 'Stream interrupted'}`]);
+      setTestLogs(prev => [...prev, `> Error: ${e.message}`]);
       console.error(e);
     } finally {
       setIsTesting(false);
@@ -209,9 +196,44 @@ export function ModelsView({ onBack }: { onBack: () => void }) {
 
   const isModified = JSON.stringify(selectedModel) !== JSON.stringify(originalModel);
 
+  const getTemplate = () => {
+    return `import json
+import httpx
+
+async def generate_stream(messages, config):
+    # 💡 提示: 这里你可以完全无视 config，直接写死地址
+    # 也可以使用 config.get("key") 获取参数表格中的值
+    
+    url = "https://api.deepseek.com/chat/completions"
+    api_key = "YOUR_API_KEY"
+    
+    headers = {"Authorization": f"Bearer {api_key}"}
+    payload = {
+        "model": "deepseek-chat",
+        "messages": [{"role": m.role, "content": m.content} for m in messages],
+        "stream": True
+    }
+    
+    yield "--> [Debug] 正在请求: " + url + "\n"
+    
+    async with httpx.AsyncClient(timeout=60.0) as client:
+        async with client.stream("POST", url, json=payload, headers=headers) as resp:
+            if resp.status_code != 200:
+                yield f"--> [Error] 接口报错: {resp.status_code}\n"
+                return
+            async for line in resp.aiter_lines():
+                if line.startswith("data: "):
+                    data_str = line[6:].strip()
+                    if data_str == "[DONE]": break
+                    try:
+                        content = json.loads(data_str)["choices"][0]["delta"].get("content", "")
+                        if content: yield content
+                    except: continue`;
+  };
+
   return (
     <main className="flex-1 bg-slate-50 flex overflow-hidden">
-      {/* Sidebar - Slimmed Down */}
+      {/* Sidebar */}
       <div className="w-64 bg-white border-r border-slate-200 flex flex-col">
         <div className="p-6 border-b border-slate-100 flex items-center justify-between">
           <div className="flex items-center gap-2">
@@ -228,13 +250,9 @@ export function ModelsView({ onBack }: { onBack: () => void }) {
               key={m.id}
               onClick={() => {
                 setSelectedModel(m);
-                if (unsavedIds.has(m.id)) {
-                    setOriginalModel(null);
-                } else {
-                    setOriginalModel(m);
-                }
+                setOriginalModel(unsavedIds.has(m.id) ? null : m);
               }}
-              className={`w-full text-left p-3 rounded-xl transition-all ${selectedModel?.id === m.id ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-200' : 'hover:bg-slate-50 text-slate-600'}`}
+              className={`w-full text-left p-3 rounded-xl transition-all ${selectedModel?.id === m.id ? 'bg-indigo-600 text-white shadow-lg' : 'hover:bg-slate-50 text-slate-600'}`}
             >
               <div className="flex items-center justify-between">
                 <span className="font-bold text-xs truncate mr-2">{m.name}</span>
@@ -267,19 +285,18 @@ export function ModelsView({ onBack }: { onBack: () => void }) {
                   <div className="h-8 w-[1px] bg-slate-100"></div>
                   <div>
                     <label className="block text-[9px] font-black text-slate-400 uppercase mb-0.5">运行模式</label>
-                      <select 
-                        className="bg-slate-50 border border-slate-100 rounded-lg px-2 py-1 text-xs font-bold outline-none"
-                        value={selectedModel.type === 'custom' ? 'custom' : 'builtin'}
-                        onChange={e => {
-                            const isCustom = e.target.value === 'custom';
-                            const defaultScript = `import json\nimport httpx\n\nasync def generate_stream(messages, config):\n    # 💡 提示: 使用 yield "..." 进行调试日志输出\n    yield "--> [Debug] 正在初始化请求...\\n"\n    \n    api_key = config.get("api_key")\n    base_url = config.get("base_url")\n    model = config.get("model", "gpt-3.5-turbo")\n    \n    headers = {"Authorization": f"Bearer {api_key}"}\n    payload = {"model": model, "messages": [{"role": m.role, "content": m.content} for m in messages], "stream": True}\n    \n    yield f"--> [Debug] 目标端点: {base_url}\\n"\n    \n    async with httpx.AsyncClient(timeout=60.0) as client:\n        async with client.stream("POST", f"{base_url}/chat/completions", json=payload, headers=headers) as resp:\n            if resp.status_code != 200:\n                yield f"--> [Error] API 返回错误: {resp.status_code}\\n"\n                return\n            async for line in resp.aiter_lines():\n                if line.startswith("data: "):\n                    data_str = line[6:].strip()\n                    if data_str == "[DONE]": break\n                    try:\n                        data = json.loads(data_str)\n                        content = data["choices"][0]["delta"].get("content", "")\n                        if content: yield content\n                    except: continue`;
-                            setSelectedModel({
-                                ...selectedModel, 
-                                type: isCustom ? 'custom' : 'openai',
-                                script_content: isCustom ? (selectedModel.script_content || defaultScript) : undefined
-                            });
-                        }}
-                      >
+                    <select 
+                      className="bg-slate-50 border border-slate-100 rounded-lg px-2 py-1 text-xs font-bold outline-none"
+                      value={selectedModel.type === 'custom' ? 'custom' : 'builtin'}
+                      onChange={e => {
+                          const isCustom = e.target.value === 'custom';
+                          setSelectedModel({
+                              ...selectedModel, 
+                              type: isCustom ? 'custom' : 'openai',
+                              script_content: isCustom ? (selectedModel.script_content || getTemplate()) : undefined
+                          });
+                      }}
+                    >
                       <option value="builtin">标准模型厂商</option>
                       <option value="custom">自定义脚本</option>
                     </select>
@@ -315,7 +332,7 @@ export function ModelsView({ onBack }: { onBack: () => void }) {
                   onClick={() => setActiveTab('advanced')}
                   className={`text-[10px] font-black uppercase tracking-widest pb-2 transition-all border-b-2 ${activeTab === 'advanced' ? 'border-indigo-600 text-indigo-600' : 'border-transparent text-slate-400 hover:text-slate-600'}`}
                 >
-                  高级 JSON 配置
+                  参数配置表格
                 </button>
               </div>
             </div>
@@ -340,15 +357,7 @@ export function ModelsView({ onBack }: { onBack: () => void }) {
                             <span>VIM MODE: {isVimMode ? 'ON' : 'OFF'}</span>
                          </button>
                        </div>
-                       <button 
-                          onClick={() => {
-                            const template = `import json\nimport httpx\n\nasync def generate_stream(messages, config):\n    # 💡 提示: 使用 yield "..." 进行调试日志输出\n    yield "--> [Debug] 正在初始化请求...\\n"\n    \n    api_key = config.get("api_key")\n    base_url = config.get("base_url")\n    model = config.get("model", "gpt-3.5-turbo")\n    \n    headers = {"Authorization": f"Bearer {api_key}"}\n    payload = {"model": model, "messages": [{"role": m.role, "content": m.content} for m in messages], "stream": True}\n    \n    yield f"--> [Debug] 目标端点: {base_url}\\n"\n    \n    async with httpx.AsyncClient(timeout=60.0) as client:\n        async with client.stream("POST", f"{base_url}/chat/completions", json=payload, headers=headers) as resp:\n            if resp.status_code != 200:\n                yield f"--> [Error] API 返回错误: {resp.status_code}\\n"\n                return\n            async for line in resp.aiter_lines():\n                if line.startswith("data: "):\n                    data_str = line[6:].strip()\n                    if data_str == "[DONE]": break\n                    try:\n                        data = json.loads(data_str)\n                        content = data["choices"][0]["delta"].get("content", "")\n                        if content: yield content\n                    except: continue`;
-                            setSelectedModel({...selectedModel, script_content: template});
-                          }}
-                          className="hover:text-amber-400 transition-colors"
-                        >
-                          填充标准模板
-                       </button>
+                       <button onClick={() => setSelectedModel({...selectedModel, script_content: getTemplate()})} className="hover:text-amber-400 transition-colors text-[9px] uppercase font-bold">填充标准模板</button>
                     </div>
                     <div className="flex-1 overflow-hidden">
                       <CodeMirror
@@ -358,24 +367,11 @@ export function ModelsView({ onBack }: { onBack: () => void }) {
                         extensions={[
                           python(),
                           ...(isVimMode ? [vim()] : []),
-                          keymap.of([{
-                            key: "Mod-s",
-                            run: () => {
-                              handleSave();
-                              return true;
-                            }
-                          }])
+                          keymap.of([{ key: "Mod-s", run: () => { handleSave(); return true; } }])
                         ]}
                         onChange={(value) => setSelectedModel({...selectedModel, script_content: value})}
                         className="h-full text-sm"
-                        basicSetup={{
-                          lineNumbers: true,
-                          foldGutter: true,
-                          highlightActiveLine: true,
-                          dropCursor: true,
-                          allowMultipleSelections: true,
-                          indentOnInput: true,
-                        }}
+                        basicSetup={{ lineNumbers: true, highlightActiveLine: true, indentOnInput: true }}
                       />
                     </div>
                   </div>
@@ -407,7 +403,6 @@ export function ModelsView({ onBack }: { onBack: () => void }) {
                           />
                         </div>
                       </div>
-
                       <div className="mb-8">
                         <label className="block text-[11px] font-black text-slate-400 uppercase mb-2 ml-1">基础 URL (Base URL)</label>
                         <input 
@@ -417,7 +412,6 @@ export function ModelsView({ onBack }: { onBack: () => void }) {
                           onChange={e => setSelectedModel({...selectedModel, config: {...selectedModel.config, base_url: e.target.value}})}
                         />
                       </div>
-
                       <div className="mb-8">
                         <label className="block text-[11px] font-black text-slate-400 uppercase mb-2 ml-1">API 密钥 (API Key)</label>
                         <input 
@@ -444,124 +438,58 @@ export function ModelsView({ onBack }: { onBack: () => void }) {
                         <button 
                           onClick={() => {
                             const newKey = `param_${Math.random().toString(36).substring(7)}`;
-                            setSelectedModel({
-                              ...selectedModel,
-                              config: { ...selectedModel.config, [newKey]: "" }
-                            });
+                            setSelectedModel({...selectedModel, config: { ...selectedModel.config, [newKey]: "" }});
                           }}
                           className="flex items-center gap-2 px-4 py-2 bg-indigo-50 text-indigo-600 rounded-xl text-[10px] font-black uppercase tracking-widest hover:bg-indigo-100 transition-all"
                         >
                           <Plus size={14} /> 添加参数
                         </button>
                       </div>
-
                       <div className="space-y-3">
                         {Object.entries(selectedModel.config).map(([key, value], idx) => (
                           <div key={idx} className="flex items-center gap-3 group">
-                            <div className="flex-1">
-                              <input 
-                                className="w-full bg-slate-50 border border-slate-100 rounded-xl px-4 py-2.5 text-xs font-mono text-indigo-600 outline-none focus:ring-2 focus:ring-indigo-500/20 transition-all"
-                                value={key}
-                                onChange={e => {
-                                  const newKey = e.target.value;
-                                  if (newKey === key) return;
-                                  const newConfig = { ...selectedModel.config };
-                                  delete newConfig[key];
-                                  newConfig[newKey] = value;
-                                  setSelectedModel({ ...selectedModel, config: newConfig });
-                                }}
-                              />
-                            </div>
-                            <div className="flex-[1.5]">
-                              <input 
-                                className="w-full bg-slate-50 border border-slate-100 rounded-xl px-4 py-2.5 text-xs font-medium text-slate-700 outline-none focus:ring-2 focus:ring-indigo-500/20 transition-all"
-                                value={typeof value === 'object' ? JSON.stringify(value) : String(value)}
-                                placeholder="值 (字符串/数字/布尔)"
-                                onChange={e => {
-                                  let val: any = e.target.value;
-                                  if (val === "true") val = true;
-                                  else if (val === "false") val = false;
-                                  else if (!isNaN(Number(val)) && val.trim() !== "") val = Number(val);
-                                  
-                                  setSelectedModel({
-                                    ...selectedModel,
-                                    config: { ...selectedModel.config, [key]: val }
-                                  });
-                                }}
-                              />
-                            </div>
-                            <button 
-                              onClick={() => {
+                            <input className="flex-1 bg-slate-50 border border-slate-100 rounded-xl px-4 py-2.5 text-xs font-mono text-indigo-600 outline-none" value={key} onChange={e => {
+                                const newKey = e.target.value;
+                                if (newKey === key) return;
+                                const newConfig = { ...selectedModel.config };
+                                delete newConfig[key];
+                                newConfig[newKey] = value;
+                                setSelectedModel({ ...selectedModel, config: newConfig });
+                            }} />
+                            <input className="flex-[1.5] bg-slate-50 border border-slate-100 rounded-xl px-4 py-2.5 text-xs font-medium text-slate-700 outline-none" value={typeof value === 'object' ? JSON.stringify(value) : String(value)} onChange={e => {
+                                let val: any = e.target.value;
+                                if (val === "true") val = true;
+                                else if (val === "false") val = false;
+                                else if (!isNaN(Number(val)) && val.trim() !== "") val = Number(val);
+                                setSelectedModel({ ...selectedModel, config: { ...selectedModel.config, [key]: val }});
+                            }} />
+                            <button onClick={() => {
                                 const configCopy = { ...selectedModel.config };
                                 delete configCopy[key];
                                 setSelectedModel({ ...selectedModel, config: configCopy });
-                              }}
-                              className="p-2.5 text-slate-300 hover:text-rose-500 hover:bg-rose-50 rounded-xl transition-all"
-                            >
-                              <Trash2 size={16} />
-                            </button>
+                            }} className="p-2.5 text-slate-300 hover:text-rose-500 transition-all"><Trash2 size={16} /></button>
                           </div>
                         ))}
                       </div>
-
-                      {Object.keys(selectedModel.config).length === 0 && (
-                        <div className="py-20 text-center border-2 border-dashed border-slate-100 rounded-3xl">
-                          <Settings2 size={32} className="mx-auto text-slate-200 mb-3" />
-                          <p className="text-[10px] font-black text-slate-300 uppercase tracking-widest">暂无配置参数</p>
-                        </div>
-                      )}
                     </div>
                   </div>
-                </div>
+                )
               )}
 
-              {/* Bottom Terminal Drawer */}
+              {/* Bottom Terminal */}
               <div className={`transition-all duration-300 ease-in-out bg-slate-900 border-t border-slate-800 flex flex-col ${isTerminalExpanded ? 'h-80' : 'h-[44px]'}`}>
-                <div 
-                  className="px-6 py-2 border-b border-slate-800 flex items-center justify-between bg-slate-900/50 cursor-pointer hover:bg-slate-800/50 transition-colors"
-                  onClick={() => setIsTerminalExpanded(!isTerminalExpanded)}
-                >
+                <div className="px-6 py-2 border-b border-slate-800 flex items-center justify-between cursor-pointer hover:bg-slate-800/50 transition-colors" onClick={() => setIsTerminalExpanded(!isTerminalExpanded)}>
                   <div className="flex items-center gap-4">
-                    <div className="flex items-center gap-2">
-                      <button className="p-1 -ml-1 hover:bg-slate-700 rounded transition-colors text-slate-500">
-                        {isTerminalExpanded ? <ChevronDown size={14} /> : <ChevronUp size={14} />}
-                      </button>
-                      <Terminal size={14} className="text-slate-500" />
-                      <h3 className="text-[10px] font-black uppercase tracking-widest text-slate-400">诊断终端</h3>
-                    </div>
+                    <Terminal size={14} className="text-slate-500" />
+                    <h3 className="text-[10px] font-black uppercase tracking-widest text-slate-400">诊断终端</h3>
                   </div>
                   <div className="flex items-center gap-3" onClick={e => e.stopPropagation()}>
-                    <button 
-                        onClick={() => setTestLogs([])}
-                        className="text-[9px] font-black uppercase text-slate-500 hover:text-slate-300 transition-colors"
-                    >
-                        Clear
-                    </button>
-                    <button 
-                        onClick={!isTesting ? runDiagnostics : undefined}
-                        disabled={isTesting}
-                        className={`flex items-center gap-2 px-4 py-1.5 rounded-full text-[10px] font-black uppercase tracking-widest transition-all ${isTesting ? 'bg-slate-800 text-slate-600 cursor-not-allowed' : 'bg-emerald-600 text-white hover:bg-emerald-500 shadow-lg shadow-emerald-900/20'}`}
-                    >
-                        <Play size={12} fill="currentColor" /> {isTesting ? 'Testing...' : 'Run Test'}
-                    </button>
+                    <button onClick={() => setTestLogs([])} className="text-[9px] font-black uppercase text-slate-500 hover:text-slate-300">Clear</button>
+                    <button onClick={!isTesting ? runDiagnostics : undefined} className={`flex items-center gap-2 px-4 py-1.5 rounded-full text-[10px] font-black uppercase ${isTesting ? 'bg-slate-800 text-slate-600' : 'bg-emerald-600 text-white shadow-lg shadow-emerald-900/20'}`}><Play size={12} fill="currentColor" /> {isTesting ? 'Testing...' : 'Run Test'}</button>
                   </div>
                 </div>
-                <div className="flex-1 p-6 font-mono text-xs overflow-y-auto selection:bg-indigo-500/30 terminal-scrollbar">
-                  {testLogs.length === 0 ? (
-                      <div className="text-slate-600 italic">
-                          {'>'} 等待运行诊断测试...<br/>
-                          {'>'} 提示: 在自定义脚本中使用 yield 关键字可将调试信息实时输出至此。
-                      </div>
-                  ) : (
-                      <div className="space-y-1">
-                          {testLogs.map((log, i) => (
-                              <div key={i} className={`whitespace-pre-wrap ${log.includes('Error') || log.includes('failed') ? 'text-rose-400' : log.includes('-->') ? 'text-indigo-400' : 'text-emerald-400/80'}`}>
-                                  {log}
-                              </div>
-                          ))}
-                          <div id="logs-end"></div>
-                      </div>
-                  )}
+                <div className="flex-1 p-6 font-mono text-xs overflow-y-auto terminal-scrollbar selection:bg-indigo-500/30">
+                  {testLogs.length === 0 ? <div className="text-slate-600 italic">{'>'} 等待运行诊断测试...</div> : testLogs.map((log, i) => <div key={i} className={`whitespace-pre-wrap ${log.includes('Error') ? 'text-rose-400' : 'text-emerald-400/80'}`}>{log}</div>)}
                 </div>
               </div>
             </div>

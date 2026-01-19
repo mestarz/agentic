@@ -87,19 +87,22 @@ class AdapterManager:
                 module = importlib.util.module_from_spec(spec)
                 spec.loader.exec_module(module)
 
+                # Ensure config is a dict
+                script_config = model_cfg.config if model_cfg.config is not None else {}
+                
                 print("DEBUG: Calling generate_stream in script", flush=True)
                 
                 if hasattr(module, 'generate_stream'):
                     func = module.generate_stream
                     if inspect.isasyncgenfunction(func):
-                        async for chunk in func(request.messages, model_cfg.config):
+                        async for chunk in func(request.messages, script_config):
                             yield chunk
                     elif inspect.isgeneratorfunction(func):
-                        for chunk in func(request.messages, model_cfg.config):
+                        for chunk in func(request.messages, script_config):
                             yield chunk
                     else:
                         # Handle regular function returning generator/async generator
-                        res = func(request.messages, model_cfg.config)
+                        res = func(request.messages, script_config)
                         if inspect.isasyncgen(res):
                             async for chunk in res:
                                 yield chunk

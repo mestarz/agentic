@@ -29,15 +29,21 @@ function App() {
           setAppConfigs(prev => {
             const next = { ...prev };
             let changed = false;
-            // 如果是默认的 mock-model 或模型已不存在，则自动选中第一个
+            
+            // 策略：如果当前 ID 是默认的 'mock-model' 或者当前 ID 在列表中已经找不到了
+            // 则强制对齐到模型列表中的第一个模型
             if (prev.agentModelID === 'mock-model' || !models.find(m => m.id === prev.agentModelID)) {
+              console.log(`>>> [Config] 自动对齐 Agent 模型: ${models[0].id}`);
               next.agentModelID = models[0].id;
               changed = true;
             }
+            
             if (prev.coreModelID === 'mock-model' || !models.find(m => m.id === prev.coreModelID)) {
+              console.log(`>>> [Config] 自动对齐 Core 模型: ${models[0].id}`);
               next.coreModelID = models[0].id;
               changed = true;
             }
+            
             return changed ? next : prev;
           });
         }
@@ -154,7 +160,11 @@ function App() {
       )}
 
       {view === 'models' && (
-        <ModelsView onBack={() => setView('chat')} />
+        <ModelsView 
+          onBack={() => setView('chat')} 
+          appConfigs={appConfigs}
+          setAppConfigs={setAppConfigs}
+        />
       )}
     </div>
   );

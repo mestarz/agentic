@@ -7,7 +7,13 @@ import { vim } from '@replit/codemirror-vim';
 import { keymap } from '@codemirror/view';
 import type { ModelAdapterConfig } from '../../types';
 
-export function ModelsView({ onBack }: { onBack: () => void }) {
+interface ModelsViewProps {
+  onBack: () => void;
+  appConfigs: AppConfigs;
+  setAppConfigs: React.Dispatch<React.SetStateAction<AppConfigs>>;
+}
+
+export function ModelsView({ onBack, appConfigs, setAppConfigs }: ModelsViewProps) {
   const [models, setModels] = useState<ModelAdapterConfig[]>([]);
   const [selectedModel, setSelectedModel] = useState<ModelAdapterConfig | null>(null);
   const [loading, setLoading] = useState(false);
@@ -63,12 +69,31 @@ export function ModelsView({ onBack }: { onBack: () => void }) {
 
   const handleDelete = async () => {
     if (!selectedModel) return;
+    const deletedId = selectedModel.id;
     if (!confirm(`确定要删除模型 "${selectedModel.name}" 吗？`)) return;
     setLoading(true);
     try {
-      const resp = await fetch(`/api/models/models/${selectedModel.id}`, { method: 'DELETE' });
+      const resp = await fetch(`/api/models/models/${deletedId}`, { method: 'DELETE' });
       if (!resp.ok) throw new Error("Delete failed");
-      await fetchModels();
+      
+      // 1. 重新拉取列表
+      const refreshResp = await fetch('/api/models/models');
+      const refreshData = await refreshResp.json();
+      const updatedModels = refreshData.data || [];
+      setModels(updatedModels);
+      
+      // 2. 核心自愈逻辑：如果被删除的是正在使用的模型，自动对齐
+      if (appConfigs.agentModelID === deletedId || appConfigs.coreModelID === deletedId) {
+          setAppConfigs(prev => {
+              const next = { ...prev };
+              const fallbackId = updatedModels.length > 0 ? updatedModels[0].id : 'mock-model';
+              if (prev.agentModelID === deletedId) next.agentModelID = fallbackId;
+              if (prev.coreModelID === deletedId) next.coreModelID = fallbackId;
+              console.log(`>>> [Cascading Delete] 模型已删除，配置已自动迁移至: ${fallbackId}`);
+              return next;
+          });
+      }
+
       setSelectedModel(null);
       setOriginalModel(null);
     } catch (e) {

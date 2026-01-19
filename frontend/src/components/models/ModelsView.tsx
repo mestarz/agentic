@@ -8,6 +8,8 @@ export function ModelsView({ onBack }: { onBack: () => void }) {
   const [loading, setLoading] = useState(false);
   const [unsavedIds, setUnsavedIds] = useState<Set<string>>(new Set());
   const [originalModel, setOriginalModel] = useState<ModelAdapterConfig | null>(null);
+  const [testLogs, setTestLogs] = useState<string[]>([]);
+  const [isTesting, setIsTesting] = useState(false);
 
   useEffect(() => {
     fetchModels();
@@ -87,6 +89,77 @@ export function ModelsView({ onBack }: { onBack: () => void }) {
     setSelectedModel(newModel);
     setOriginalModel(null); // New models are always considered "modified" relative to nothing
     setUnsavedIds(prev => new Set(prev).add(newId));
+  };
+
+  const runDiagnostics = async () => {
+    if (!selectedModel) return;
+    if (isModified) {
+        alert("请先保存配置后再进行诊断测试。");
+        return;
+    }
+    
+    setIsTesting(true);
+    setTestLogs([`> Initializing test for ${selectedModel.id}...`]);
+
+    try {
+      const res = await fetch('/api/models/chat/completions', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          model: selectedModel.id,
+          messages: [{ role: 'user', content: 'Hello! Just testing connection.' }],
+          stream: true
+        })
+      });
+
+      if (!res.ok) {
+          const text = await res.text();
+          throw new Error(`HTTP ${res.status}: ${text}`);
+      }
+
+      setTestLogs(prev => [...prev, '> Connected. Waiting for response...']);
+      
+      const reader = res.body?.getReader();
+      const decoder = new TextDecoder();
+      let buffer = '';
+
+      if (reader) {
+        while (true) {
+          const { done, value } = await reader.read();
+          if (done) break;
+          const chunk = decoder.decode(value, { stream: true });
+          buffer += chunk;
+          
+          const lines = buffer.split('\n');
+          buffer = lines.pop() || '';
+          
+          for (const line of lines) {
+             if (line.startsWith('data: ')) {
+                 const dataStr = line.slice(6).trim();
+                 if (dataStr === '[DONE]') break;
+                 try {
+                     const data = JSON.parse(dataStr);
+                     const content = data.choices[0]?.delta?.content;
+                     if (content) {
+                         setTestLogs(prev => {
+                             const last = prev[prev.length - 1];
+                             if (last && last.startsWith('> Rcv: ')) {
+                                 return [...prev.slice(0, -1), last + content];
+                             }
+                             return [...prev, `> Rcv: ${content}`];
+                         });
+                     }
+                 } catch {}
+             }
+          }
+        }
+      }
+      setTestLogs(prev => [...prev, '> Test finished.']);
+    } catch (e: any) {
+      setTestLogs(prev => [...prev, `> Error: ${e.message}`]);
+    } finally {
+      setIsTesting(false);
+    }
   };
 
   const isModified = JSON.stringify(selectedModel) !== JSON.stringify(originalModel);
@@ -288,12 +361,22 @@ export function ModelsView({ onBack }: { onBack: () => void }) {
                 <div className="flex-1 p-6 flex flex-col">
                    <div className="flex items-center justify-between mb-4">
                     <h3 className="text-[10px] font-black uppercase tracking-widest text-slate-400">适配器诊断</h3>
-                    <Play size={14} className="text-emerald-500 cursor-pointer hover:scale-110 transition-transform" />
+                    <Play 
+                        size={14} 
+                        onClick={!isTesting ? runDiagnostics : undefined}
+                        className={`text-emerald-500 cursor-pointer hover:scale-110 transition-transform ${isTesting ? 'opacity-50 animate-pulse' : ''}`} 
+                    />
                   </div>
                   <div className="flex-1 bg-white border border-slate-200 rounded-2xl p-4 text-[11px] text-slate-400 font-medium font-mono overflow-y-auto">
-                    {'>'} Ready to test adapter...<br/>
-                    {'>'} Model: {selectedModel.id}<br/>
-                    {'>'} Type: {selectedModel.type}<br/>
+                    {testLogs.length === 0 ? (
+                        <>
+                            {'>'} Ready to test adapter...<br/>
+                            {'>'} Model: {selectedModel.id}<br/>
+                            {'>'} Type: {selectedModel.type}<br/>
+                        </>
+                    ) : (
+                        testLogs.map((log, i) => <div key={i} className="whitespace-pre-wrap mb-1">{log}</div>)
+                    )}
                   </div>
                 </div>
               </div>

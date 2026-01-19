@@ -4,6 +4,7 @@ import CodeMirror from '@uiw/react-codemirror';
 import { python } from '@codemirror/lang-python';
 import { oneDark } from '@codemirror/theme-one-dark';
 import { vim } from '@replit/codemirror-vim';
+import { keymap } from '@codemirror/view';
 import type { ModelAdapterConfig } from '../../types';
 
 export function ModelsView({ onBack }: { onBack: () => void }) {
@@ -356,7 +357,14 @@ export function ModelsView({ onBack }: { onBack: () => void }) {
                         theme={oneDark}
                         extensions={[
                           python(),
-                          ...(isVimMode ? [vim()] : [])
+                          ...(isVimMode ? [vim()] : []),
+                          keymap.of([{
+                            key: "Mod-s",
+                            run: () => {
+                              handleSave();
+                              return true;
+                            }
+                          }])
                         ]}
                         onChange={(value) => setSelectedModel({...selectedModel, script_content: value})}
                         className="h-full text-sm"

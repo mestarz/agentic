@@ -77,9 +77,6 @@ class AdapterManager:
         
         # 1. 如果是自定义脚本类型
         if model_cfg.type == "custom" and model_cfg.script_content:
-            if request.is_diagnostic:
-                yield "--> [System] Loading custom script...\n"
-            
             print(f"DEBUG: Executing custom script for {model_id}", flush=True)
             try:
                 script_path = os.path.join(self.scripts_dir, f"{model_id}.py")
@@ -90,9 +87,6 @@ class AdapterManager:
                 module = importlib.util.module_from_spec(spec)
                 spec.loader.exec_module(module)
 
-                if request.is_diagnostic:
-                    yield "--> [System] Script loaded. Executing generate_stream...\n"
-                
                 print("DEBUG: Calling generate_stream in script", flush=True)
                 
                 if hasattr(module, 'generate_stream'):
@@ -116,14 +110,14 @@ class AdapterManager:
                             yield str(res)
                 else:
                     if request.is_diagnostic:
-                        yield "--> [System] Error: 'generate_stream' function not found in script.\n"
+                        yield "Error: 'generate_stream' function not found in script.\n"
                 
                 print("DEBUG: Script execution finished", flush=True)
             except Exception as e:
                 import traceback
                 print(f"DEBUG: Error in custom script execution: {e}", flush=True)
                 if request.is_diagnostic:
-                    yield f"--> [System] Execution Error:\n{traceback.format_exc()}\n"
+                    yield f"Execution Error:\n{traceback.format_exc()}\n"
                 else:
                     yield f"Error executing script: {str(e)}"
         

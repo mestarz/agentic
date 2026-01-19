@@ -149,6 +149,43 @@ export function SequenceObserver({
     return result;
   }, [currentSession, activeTraceIndex]);
 
+  const handleContextMenu = (e: React.MouseEvent) => {
+    e.preventDefault();
+    if (!processedTraces.length) return;
+
+    let content = '```mermaid\nsequenceDiagram\n';
+    content += '    participant User\n';
+    content += '    participant Agent\n';
+    content += '    participant Core\n';
+    content += '    participant LLM\n\n';
+
+    processedTraces.forEach(t => {
+        let src = t.source;
+        let tgt = t.target;
+        
+        // Normalize mapping
+        if (['Gateway', 'Adapter', 'Remote Provider'].includes(src)) src = 'LLM';
+        if (['Gateway', 'Adapter', 'Remote Provider'].includes(tgt)) tgt = 'LLM';
+        if (src === 'Frontend') src = 'User';
+        if (tgt === 'Frontend') tgt = 'User';
+
+        let label = translateAction(t.action);
+        if (t.data?.internal_component) {
+            label += ` (${t.data.internal_component})`;
+        }
+        // Cleanup label for Mermaid
+        label = label.replace(/[:;]/g, ' ');
+
+        content += `    ${src}->>${tgt}: ${label}\n`;
+    });
+
+    content += '```';
+
+    navigator.clipboard.writeText(content).then(() => {
+        alert('已复制 Mermaid 时序图代码到剪贴板');
+    });
+  };
+
   return (
     <aside className="w-full h-full bg-white/95 backdrop-blur-sm border-l border-slate-200 flex flex-col hidden xl:flex overflow-hidden">
       <div className="p-4 border-b border-slate-200 bg-white flex items-center justify-between shadow-sm z-10">
@@ -179,7 +216,11 @@ export function SequenceObserver({
             <div className="flex-1"></div>
           </div>
 
-          <div className="flex-1 overflow-y-auto relative custom-scrollbar p-0">
+          <div 
+            className="flex-1 overflow-y-auto relative custom-scrollbar p-0"
+            onContextMenu={handleContextMenu}
+            title="右键点击复制 Mermaid 交互图"
+          >
             {processedTraces.length > 0 ? (
               <div className="min-h-full py-8 relative">
                 {/* 垂直生命线 */}
@@ -316,6 +357,17 @@ export function SequenceObserver({
                                <div className="text-sm font-bold text-slate-700">{currentTrace.target}</div>
                            </div>
                         </div>
+
+                        {/* Pipeline 内部组件展示 */}
+                        {currentTrace.data?.internal_component && (
+                            <div className="bg-amber-50/50 border border-amber-100 p-4 rounded-xl flex items-center justify-between">
+                               <div>
+                                 <div className="text-[10px] font-black text-amber-400 uppercase mb-1">执行组件 (Component)</div>
+                                 <div className="text-sm font-bold text-amber-700 font-mono">{currentTrace.data.internal_component}</div>
+                               </div>
+                               <Cpu size={24} className="text-amber-300" />
+                            </div>
+                        )}
 
                         {/* 新增：目标接口/模型展示 */}
                         {(() => {

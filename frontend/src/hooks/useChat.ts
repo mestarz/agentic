@@ -1,5 +1,5 @@
 import { useState, useRef } from "react";
-import type { AppConfigs, Message, Session } from "../types";
+import type { AppConfigs, Message, Session, TraceEvent } from "../types";
 
 interface UseChatProps {
   currentSession: Session | null;
@@ -18,6 +18,7 @@ export function useChat({
 }: UseChatProps) {
   const [input, setInput] = useState("");
   const [loading, setLoading] = useState(false);
+  const [liveTraces, setLiveTraces] = useState<TraceEvent[]>([]);
   const abortControllerRef = useRef<AbortController | null>(null);
 
   const handleStop = () => {
@@ -30,6 +31,7 @@ export function useChat({
   const handleSend = async () => {
     if (!input.trim() || loading) return;
 
+    setLiveTraces([]);
     const abortController = new AbortController();
     abortControllerRef.current = abortController;
 
@@ -52,9 +54,8 @@ export function useChat({
       traces: [],
     };
 
-    const targetIndex = tempMessages.length; // Index of the new AI message
+    const targetIndex = tempMessages.length;
 
-    // Optimistic update
     setCurrentSession((prev) => ({
       id: sessionId,
       app_id: prev?.app_id || "web",
@@ -97,15 +98,18 @@ export function useChat({
             try {
               const data = JSON.parse(line.replace("data: ", ""));
               if (data.type === "trace") {
+                const newTrace = { ...data.trace, timestamp: new Date().toISOString() };
+                setLiveTraces(prev => [...prev, newTrace]);
+                
                 setCurrentSession((prev) => {
-                  if (!prev) return prev;
+                  if (!prev || prev.id !== sessionId) return prev; 
                   const newMsgs = [...prev.messages];
                   if (newMsgs[targetIndex]) {
                     newMsgs[targetIndex] = {
                       ...newMsgs[targetIndex],
                       traces: [
                         ...(newMsgs[targetIndex].traces || []),
-                        { ...data.trace, timestamp: new Date().toISOString() },
+                        newTrace,
                       ],
                     };
                   }
@@ -113,7 +117,7 @@ export function useChat({
                 });
               } else if (data.type === "meta") {
                 setCurrentSession((prev) => {
-                  if (!prev) return prev;
+                  if (!prev || prev.id !== sessionId) return prev;
                   const newMsgs = [...prev.messages];
                   if (newMsgs[targetIndex])
                     newMsgs[targetIndex] = {
@@ -130,7 +134,7 @@ export function useChat({
               } else if (data.type === "chunk") {
                 fullContent += data.content || "";
                 setCurrentSession((prev) => {
-                  if (!prev) return prev;
+                  if (!prev || prev.id !== sessionId) return prev;
                   const newMsgs = [...prev.messages];
                   if (newMsgs[targetIndex])
                     newMsgs[targetIndex] = {
@@ -161,5 +165,5 @@ export function useChat({
     }
   };
 
-  return { input, setInput, loading, handleSend, handleStop };
+  return { input, setInput, loading, handleSend, handleStop, liveTraces };
 }

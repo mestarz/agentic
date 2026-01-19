@@ -119,7 +119,8 @@ class AdapterManager:
                 if request.is_diagnostic:
                     yield f"Execution Error:\n{traceback.format_exc()}\n"
                 else:
-                    yield f"Error executing script: {str(e)}"
+                    # 将错误信息包装成标准流式格式，确保前端能收到
+                    yield f"Error: {str(e)}"
         
         # 2. 如果是标准厂商类型
         else:

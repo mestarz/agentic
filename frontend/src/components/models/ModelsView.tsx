@@ -546,7 +546,7 @@ export function ModelsView({ onBack }: { onBack: () => void }) {
                     </button>
                   </div>
                 </div>
-                <div className="flex-1 p-6 font-mono text-xs overflow-y-auto selection:bg-indigo-500/30">
+                <div className="flex-1 p-6 font-mono text-xs overflow-y-auto selection:bg-indigo-500/30 terminal-scrollbar">
                   {testLogs.length === 0 ? (
                       <div className="text-slate-600 italic">
                           {'>'} 等待运行诊断测试...<br/>

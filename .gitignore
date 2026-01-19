@@ -71,3 +71,7 @@ share/python-wheels/
 *.egg
 MANIFEST
 llm-service/data/models.json
+
+# LLM Service Scripts
+llm-service/data/scripts/*
+!llm-service/data/scripts/templates/

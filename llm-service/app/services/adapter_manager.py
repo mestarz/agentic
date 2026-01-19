@@ -2,6 +2,7 @@ import os
 import importlib.util
 import json
 import asyncio
+import inspect
 import time
 from typing import List, Optional, Dict, Any
 from app.schemas import ModelAdapterConfig, ChatCompletionRequest
@@ -36,12 +37,15 @@ class AdapterManager:
             json.dump({model_id: m.dict() for model_id, m in self._models.items()}, f, indent=2)
 
     async def generate(self, request: ChatCompletionRequest):
+        print(f"DEBUG: Generating for model {request.model}", flush=True)
         model_id = request.model
         model_cfg = self._models.get(model_id)
         if not model_cfg:
+            print(f"DEBUG: Model {model_id} not found", flush=True)
             raise ValueError(f"Model {model_id} not found")
 
         # Trace: Gateway start
+        print("DEBUG: Yielding Gateway Trace", flush=True)
         yield {"trace": {
             "source": "Gateway", 
             "target": "Adapter", 
@@ -53,27 +57,49 @@ class AdapterManager:
         
         # 1. 如果是自定义脚本类型
         if model_cfg.type == "custom" and model_cfg.script_content:
-            script_path = os.path.join(self.scripts_dir, f"{model_id}.py")
-            with open(script_path, "w") as f:
-                f.write(model_cfg.script_content)
+            print(f"DEBUG: Executing custom script for {model_id}", flush=True)
+            try:
+                script_path = os.path.join(self.scripts_dir, f"{model_id}.py")
+                with open(script_path, "w") as f:
+                    f.write(model_cfg.script_content)
 
-            spec = importlib.util.spec_from_file_location(f"adapter_{model_id}", script_path)
-            module = importlib.util.module_from_spec(spec)
-            spec.loader.exec_module(module)
+                spec = importlib.util.spec_from_file_location(f"adapter_{model_id}", script_path)
+                module = importlib.util.module_from_spec(spec)
+                spec.loader.exec_module(module)
 
-            yield {"trace": {
-                "source": "Adapter", 
-                "target": "Adapter", 
-                "action": "Executing Custom Script",
-                "data": {"endpoint": f"script://{model_id}.py"}
-            }}
+                yield {"trace": {
+                    "source": "Adapter", 
+                    "target": "Adapter", 
+                    "action": "Executing Custom Script",
+                    "data": {"endpoint": f"script://{model_id}.py"}
+                }}
 
-            if asyncio.iscoroutinefunction(module.generate_stream):
-                async for chunk in module.generate_stream(request.messages, model_cfg.config):
-                    yield chunk
-            else:
-                for chunk in module.generate_stream(request.messages, model_cfg.config):
-                    yield chunk
+                print("DEBUG: Calling generate_stream in script", flush=True)
+                # Check if it's an async generator function (async def + yield)
+                if inspect.isasyncgenfunction(module.generate_stream):
+                    async for chunk in module.generate_stream(request.messages, model_cfg.config):
+                        yield chunk
+                # Check if it's a regular generator function (def + yield)
+                elif inspect.isgeneratorfunction(module.generate_stream):
+                    for chunk in module.generate_stream(request.messages, model_cfg.config):
+                        yield chunk
+                # Fallback for synchronous function returning list/string?
+                else:
+                    # Treat as synchronous generator or simple return
+                    res = module.generate_stream(request.messages, model_cfg.config)
+                    if inspect.isasyncgen(res):
+                        async for chunk in res:
+                            yield chunk
+                    elif inspect.isgenerator(res):
+                        for chunk in res:
+                            yield chunk
+                    else:
+                        yield res
+                
+                print("DEBUG: Script execution finished", flush=True)
+            except Exception as e:
+                print(f"DEBUG: Error in custom script execution: {e}", flush=True)
+                yield f"Error executing script: {str(e)}"
         
         # 2. 如果是标准厂商类型 (openai, gemini, deepseek 等)
         else:

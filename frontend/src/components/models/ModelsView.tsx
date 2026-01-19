@@ -114,10 +114,11 @@ export function ModelsView({ onBack }: { onBack: () => void }) {
                     value={selectedModel.type === 'custom' ? 'custom' : 'builtin'}
                     onChange={e => {
                         const isCustom = e.target.value === 'custom';
+                        const defaultScript = `import json\nimport httpx\n\nasync def generate_stream(messages, config):\n    api_key = config.get("api_key")\n    base_url = config.get("base_url", "https://api.deepseek.com")\n    \n    msgs = [{"role": m.role, "content": m.content} for m in messages]\n    headers = {"Authorization": f"Bearer {api_key}"}\n    payload = {"model": "deepseek-chat", "messages": msgs, "stream": True}\n    \n    async with httpx.AsyncClient(timeout=60.0) as client:\n        async with client.stream("POST", f"{base_url}/chat/completions", json=payload, headers=headers) as resp:\n            async for line in resp.aiter_lines():\n                if line.startswith("data: "):\n                    data_str = line[6:]\n                    if data_str.strip() == "[DONE]": break\n                    try:\n                        yield json.loads(data_str)["choices"][0]["delta"].get("content", "")\n                    except: continue`;
                         setSelectedModel({
                             ...selectedModel, 
                             type: isCustom ? 'custom' : 'openai',
-                            script_content: isCustom ? (selectedModel.script_content || 'def generate_stream(messages, config):\n    yield "Hello!"') : undefined
+                            script_content: isCustom ? (selectedModel.script_content || defaultScript) : undefined
                         });
                     }}
                   >

@@ -265,9 +265,6 @@ func (s *AgentService) Chat(ctx context.Context, id, query string, agentModelID,
 					send(SSEResponse{Type: "trace", Trace: res.Trace})
 				}
 				if res.Content != "" {
-					if full.Len() == 0 {
-						trace("Gateway", "Agent", "Streaming Content")
-					}
 					full.WriteString(res.Content)
 					send(SSEResponse{Type: "chunk", Content: res.Content})
 				}
@@ -279,12 +276,6 @@ func (s *AgentService) Chat(ctx context.Context, id, query string, agentModelID,
 	if err != nil {
 		send(SSEResponse{Type: "chunk", Content: "Error from LLM Gateway: " + err.Error()})
 	}
-	
-	// 流式正常结束，发送汇总 Trace
-	trace("Gateway", "Agent", "Stream Complete", map[string]interface{}{
-		"content":  full.String(),
-		"endpoint": "stream://done",
-	})
 	
 	close(internal)
 }

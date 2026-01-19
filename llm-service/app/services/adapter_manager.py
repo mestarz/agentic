@@ -61,19 +61,23 @@ class AdapterManager:
             print(f"DEBUG: Model {model_id} not found", flush=True)
             raise ValueError(f"Model {model_id} not found")
 
-        # Trace: Gateway start
-        print("DEBUG: Yielding Gateway Trace", flush=True)
+        # 1. 统一的请求开始 Trace (Gateway -> LLM)
         yield {"trace": {
             "source": "Gateway", 
-            "target": "Adapter", 
-            "action": f"Dispatch: {model_cfg.type}",
-            "data": {"endpoint": f"adapter://{model_cfg.type}"}
+            "target": "Remote Provider", 
+            "action": "Model Request",
+            "data": {
+                "model_id": model_id,
+                "type": model_cfg.type,
+                "endpoint": f"adapter://{model_cfg.type}"
+            }
         }}
 
         start_time = time.perf_counter()
         
         # 1. 如果是自定义脚本类型
         if model_cfg.type == "custom" and model_cfg.script_content:
+            # ... (omitted for brevity, keep existing logic) ...
             print(f"DEBUG: Executing custom script for {model_id}", flush=True)
             try:
                 script_path = os.path.join(self.scripts_dir, f"{model_id}.py")
@@ -84,25 +88,14 @@ class AdapterManager:
                 module = importlib.util.module_from_spec(spec)
                 spec.loader.exec_module(module)
 
-                yield {"trace": {
-                    "source": "Adapter", 
-                    "target": "Adapter", 
-                    "action": "Executing Custom Script",
-                    "data": {"endpoint": f"script://{model_id}.py"}
-                }}
-
                 print("DEBUG: Calling generate_stream in script", flush=True)
-                # Check if it's an async generator function (async def + yield)
                 if inspect.isasyncgenfunction(module.generate_stream):
                     async for chunk in module.generate_stream(request.messages, model_cfg.config):
                         yield chunk
-                # Check if it's a regular generator function (def + yield)
                 elif inspect.isgeneratorfunction(module.generate_stream):
                     for chunk in module.generate_stream(request.messages, model_cfg.config):
                         yield chunk
-                # Fallback for synchronous function returning list/string?
                 else:
-                    # Treat as synchronous generator or simple return
                     res = module.generate_stream(request.messages, model_cfg.config)
                     if inspect.isasyncgen(res):
                         async for chunk in res:
@@ -118,18 +111,28 @@ class AdapterManager:
                 print(f"DEBUG: Error in custom script execution: {e}", flush=True)
                 yield f"Error executing script: {str(e)}"
         
-        # 2. 如果是标准厂商类型 (openai, gemini, deepseek 等)
+        # 2. 如果是标准厂商类型
         else:
             async for chunk in self._builtin_adapter(model_cfg, request):
                 yield chunk
 
         duration = (time.perf_counter() - start_time) * 1000
+        
+        # 2. 模型处理 Trace (LLM -> LLM)
         yield {"trace": {
-            "source": "Adapter", 
-            "target": "Gateway", 
-            "action": "Stream Complete", 
+            "source": "Remote Provider",
+            "target": "Remote Provider",
+            "action": "Model Processing",
+            "data": { "duration_ms": round(duration, 2) }
+        }}
+
+        # 3. 响应返回 Trace (LLM -> Gateway -> Agent)
+        # 为了在时序图上直观展示数据返回给调用方(Agent)，这里 Target 设为 Agent
+        yield {"trace": {
+            "source": "Remote Provider", 
+            "target": "Agent", 
+            "action": "Model Response", 
             "data": {
-                "duration_ms": round(duration, 2),
                 "endpoint": "stream://done"
             }
         }}
@@ -141,16 +144,6 @@ class AdapterManager:
         model_name = cfg.get("model", model_cfg.id)
         full_endpoint = f"{base_url}/chat/completions"
 
-        yield {"trace": {
-            "source": "Adapter", 
-            "target": "Remote Provider", 
-            "action": f"Call {model_cfg.type} API", 
-            "data": {
-                "model": model_name,
-                "endpoint": full_endpoint
-            }
-        }}
-
         headers = {
             "Authorization": f"Bearer {api_key}",
             "Content-Type": "application/json"
@@ -161,7 +154,6 @@ class AdapterManager:
             "stream": True
         }
 
-        first_token = True
         async with httpx.AsyncClient(timeout=60.0) as client:
             try:
                 async with client.stream("POST", full_endpoint, json=payload, headers=headers) as resp:
@@ -179,14 +171,6 @@ class AdapterManager:
                                 data = json.loads(data_str)
                                 chunk = data["choices"][0]["delta"].get("content", "")
                                 if chunk:
-                                    if first_token:
-                                        yield {"trace": {
-                                            "source": "Remote Provider", 
-                                            "target": "Adapter", 
-                                            "action": "First Chunk Received",
-                                            "data": {"endpoint": f"{full_endpoint} (Streaming)"}
-                                        }}
-                                        first_token = False
                                     yield chunk
                             except:
                                 continue

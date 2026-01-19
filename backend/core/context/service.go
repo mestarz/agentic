@@ -53,13 +53,18 @@ func (e *Engine) BuildPayload(ctx stdctx.Context, id string, query string, model
 		
 		for i, t := range data.Traces {
 			src, _ := t["source"].(string)
-			tgt, _ := t["target"].(string)
+			// tgt, _ := t["target"].(string)
 			act, _ := t["action"].(string)
 			dat, _ := t["data"].(map[string]interface{})
 			
+			// 将原始组件信息注入 Data，供前端详情页展示
+			dat["internal_component"] = src
+			
+			// 强制归一化: Pipeline 的所有内部活动都在 Core 服务内部发生
+			// 表现为 Core -> Core 的自环调用
 			domainTraces = append(domainTraces, domain.TraceEvent{
-				Source:    src,
-				Target:    tgt,
+				Source:    "Core",
+				Target:    "Core",
 				Action:    act,
 				Data:      dat,
 				Timestamp: baseTime.Add(time.Duration(i) * time.Microsecond),

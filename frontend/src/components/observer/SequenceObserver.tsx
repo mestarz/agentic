@@ -52,6 +52,15 @@ export function SequenceObserver({
     'Persistence Save': '会话持久化存储',
     'Token Calculation': '计算 Token 消耗',
     'Context Compression': '上下文压缩优化',
+    'Model Request': '发送模型请求',
+    'Model Processing': '模型推理中',
+    'Model Response': '接收模型响应',
+    // Pipeline
+    'Start': '管线启动',
+    'Finished': '管线结束',
+    'Loaded': '加载数据',
+    'Truncate': '截断超长文本',
+    'Complete': 'Pass 执行完成',
     // LLM
     'Dispatch': '分发模型请求',
     'Call API': '调用模型接口',

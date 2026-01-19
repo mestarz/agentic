@@ -42,7 +42,7 @@ func main() {
 
 	repo, _ := persistence.NewFileHistoryRepository(sessionDir)
 	hSvc := history.NewService(repo)
-	cEng := context.NewEngine(repo)
+	cEng := context.NewEngine(hSvc)
 	cSvc := context.NewService(hSvc, cEng)
 	mux := http.NewServeMux()
 	ctxHandler := api.NewContextHandler(cSvc)

@@ -6,6 +6,8 @@ export function ModelsView({ onBack }: { onBack: () => void }) {
   const [models, setModels] = useState<ModelAdapterConfig[]>([]);
   const [selectedModel, setSelectedModel] = useState<ModelAdapterConfig | null>(null);
   const [loading, setLoading] = useState(false);
+  const [unsavedIds, setUnsavedIds] = useState<Set<string>>(new Set());
+  const [originalModel, setOriginalModel] = useState<ModelAdapterConfig | null>(null);
 
   useEffect(() => {
     fetchModels();
@@ -18,6 +20,7 @@ export function ModelsView({ onBack }: { onBack: () => void }) {
       setModels(data.data);
       if (data.data.length > 0 && !selectedModel) {
         setSelectedModel(data.data[0]);
+        setOriginalModel(data.data[0]);
       }
     } catch (e) {
       console.error("Failed to fetch models", e);
@@ -34,9 +37,34 @@ export function ModelsView({ onBack }: { onBack: () => void }) {
         body: JSON.stringify(selectedModel)
       });
       await fetchModels();
+      if (selectedModel) {
+        setOriginalModel(selectedModel);
+        setUnsavedIds(prev => {
+          const next = new Set(prev);
+          next.delete(selectedModel.id);
+          return next;
+        });
+      }
       alert("保存成功");
     } catch (e) {
       alert("保存失败");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleDelete = async () => {
+    if (!selectedModel) return;
+    if (!confirm(`确定要删除模型 "${selectedModel.name}" 吗？`)) return;
+    setLoading(true);
+    try {
+      const resp = await fetch(`/api/models/models/${selectedModel.id}`, { method: 'DELETE' });
+      if (!resp.ok) throw new Error("Delete failed");
+      await fetchModels();
+      setSelectedModel(null);
+      setOriginalModel(null);
+    } catch (e) {
+      alert("删除失败: " + e);
     } finally {
       setLoading(false);
     }
@@ -57,7 +85,11 @@ export function ModelsView({ onBack }: { onBack: () => void }) {
     };
     setModels([...models, newModel]);
     setSelectedModel(newModel);
+    setOriginalModel(null); // New models are always considered "modified" relative to nothing
+    setUnsavedIds(prev => new Set(prev).add(newId));
   };
+
+  const isModified = JSON.stringify(selectedModel) !== JSON.stringify(originalModel);
 
   return (
     <main className="flex-1 bg-slate-50 flex overflow-hidden">
@@ -76,7 +108,16 @@ export function ModelsView({ onBack }: { onBack: () => void }) {
           {models.map(m => (
             <button
               key={m.id}
-              onClick={() => setSelectedModel(m)}
+              onClick={() => {
+                setSelectedModel(m);
+                // If it's an unsaved new model, originalModel should act as null to keep Save button enabled
+                // Otherwise, reset originalModel to the fetched state
+                if (unsavedIds.has(m.id)) {
+                    setOriginalModel(null);
+                } else {
+                    setOriginalModel(m);
+                }
+              }}
               className={`w-full text-left p-4 rounded-2xl transition-all ${selectedModel?.id === m.id ? 'bg-indigo-50 border-indigo-100 text-indigo-700 shadow-sm' : 'hover:bg-slate-50 text-slate-600'}`}
             >
               <div className="flex items-center justify-between">
@@ -130,10 +171,17 @@ export function ModelsView({ onBack }: { onBack: () => void }) {
               <div className="flex items-center gap-3">
                 <button 
                   onClick={handleSave}
-                  disabled={loading}
-                  className="flex items-center gap-2 px-6 py-3 bg-indigo-600 text-white rounded-2xl font-black text-xs uppercase tracking-widest hover:bg-indigo-700 shadow-xl shadow-indigo-100 transition-all active:scale-95"
+                  disabled={loading || !isModified}
+                  className="flex items-center gap-2 px-6 py-3 bg-indigo-600 text-white rounded-2xl font-black text-xs uppercase tracking-widest hover:bg-indigo-700 shadow-xl shadow-indigo-100 transition-all active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed"
                 >
-                  <Save size={16} /> {loading ? 'Saving...' : '同步配置'}
+                  <Save size={16} /> {loading ? 'Saving...' : '保存'}
+                </button>
+                <button 
+                  onClick={handleDelete}
+                  disabled={loading || (selectedModel && unsavedIds.has(selectedModel.id))}
+                  className="flex items-center gap-2 px-4 py-3 bg-rose-500 text-white rounded-2xl font-black text-xs uppercase tracking-widest hover:bg-rose-600 shadow-xl shadow-rose-100 transition-all active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  <Trash2 size={16} /> 删除
                 </button>
               </div>
             </div>
@@ -225,9 +273,10 @@ export function ModelsView({ onBack }: { onBack: () => void }) {
                 <div className="p-6 border-b border-slate-200 bg-white">
                   <h3 className="text-[10px] font-black uppercase tracking-widest text-slate-400 mb-4">扩展 JSON 配置</h3>
                   <textarea
+                    key={selectedModel.id + JSON.stringify(selectedModel.config)}
                     className="w-full h-48 bg-slate-50 border border-slate-200 rounded-2xl p-4 font-mono text-[10px] outline-none focus:ring-2 focus:ring-indigo-500/10 transition-all"
-                    value={JSON.stringify(selectedModel.config, null, 2)}
-                    onChange={e => {
+                    defaultValue={JSON.stringify(selectedModel.config, null, 2)}
+                    onBlur={e => {
                         try {
                             const parsed = JSON.parse(e.target.value);
                             setSelectedModel({...selectedModel, config: parsed});

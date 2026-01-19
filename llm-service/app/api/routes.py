@@ -17,6 +17,13 @@ async def register_model(model: ModelAdapterConfig):
     manager.save_model(model)
     return {"status": "success", "model_id": model.id}
 
+@router.delete("/models/{model_id}")
+async def delete_model(model_id: str):
+    success = manager.delete_model(model_id)
+    if not success:
+        raise HTTPException(status_code=404, detail="Model not found")
+    return {"status": "success", "model_id": model_id}
+
 @router.post("/chat/completions")
 async def chat_completions(request: ChatCompletionRequest):
     try:

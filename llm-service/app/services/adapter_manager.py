@@ -36,6 +36,23 @@ class AdapterManager:
         with open(self.models_file, "w") as f:
             json.dump({model_id: m.dict() for model_id, m in self._models.items()}, f, indent=2)
 
+    def delete_model(self, model_id: str) -> bool:
+        if model_id in self._models:
+            model = self._models[model_id]
+            # Try to delete the script file if it exists
+            script_path = os.path.join(self.scripts_dir, f"{model_id}.py")
+            if os.path.exists(script_path):
+                try:
+                    os.remove(script_path)
+                except OSError:
+                    pass
+            
+            del self._models[model_id]
+            with open(self.models_file, "w") as f:
+                json.dump({mid: m.dict() for mid, m in self._models.items()}, f, indent=2)
+            return True
+        return False
+
     async def generate(self, request: ChatCompletionRequest):
         print(f"DEBUG: Generating for model {request.model}", flush=True)
         model_id = request.model

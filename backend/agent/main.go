@@ -41,9 +41,17 @@ func main() {
 			return
 		}
 		
-		// Fallback to defaults if not provided
-		if req.AgentModelID == "" { req.AgentModelID = "mock-model" }
-		if req.CoreModelID == "" { req.CoreModelID = "mock-model" }
+		// Validate required fields
+		if req.AgentModelID == "" {
+			http.Error(w, "agent_model_id is required", http.StatusBadRequest)
+			return
+		}
+		if req.CoreModelID == "" {
+			// CoreModelID might be optional depending on design, but let's enforce it for now or default to AgentModelID?
+			// Let's enforce it to be explicit based on user's request for robustness.
+			http.Error(w, "core_model_id is required", http.StatusBadRequest)
+			return
+		}
 
 		w.Header().Set("Content-Type", "text/event-stream")
 		flusher, ok := w.(http.Flusher)

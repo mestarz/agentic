@@ -99,7 +99,14 @@ export function ModelsView({ onBack }: { onBack: () => void }) {
     }
     
     setIsTesting(true);
-    setTestLogs([`> Initializing test for ${selectedModel.id}...`]);
+    const targetInfo = selectedModel.config.base_url 
+        ? selectedModel.config.base_url 
+        : (selectedModel.type === 'custom' ? '自定义脚本执行环境' : '默认端点');
+        
+    setTestLogs([
+        `> 正在初始化诊断测试: ${selectedModel.id}...`,
+        `> [Step 1/2] 连通性检查: 正在探测 ${targetInfo}...`
+    ]);
 
     try {
       const res = await fetch('/api/models/chat/completions', {
@@ -114,10 +121,10 @@ export function ModelsView({ onBack }: { onBack: () => void }) {
 
       if (!res.ok) {
           const text = await res.text();
-          throw new Error(`HTTP ${res.status}: ${text}`);
+          throw new Error(`连接失败 (HTTP ${res.status}): ${text}`);
       }
 
-      setTestLogs(prev => [...prev, '> Connected. Waiting for response...']);
+      setTestLogs(prev => [...prev, '> 连通性检查通过。[Step 2/2] 正在等待模型流式回复...']);
       
       const reader = res.body?.getReader();
       const decoder = new TextDecoder();

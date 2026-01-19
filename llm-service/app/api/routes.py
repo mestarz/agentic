@@ -52,11 +52,10 @@ async def chat_completions(request: ChatCompletionRequest):
         raise HTTPException(status_code=500, detail=str(e))
 
 async def stream_generator(request: ChatCompletionRequest):
+    print(f">>> [API] Incoming stream request for model: {request.model}", flush=True)
     try:
         async for chunk in manager.generate(request):
             if isinstance(chunk, dict) and "trace" in chunk:
-                # Inject trace as a special field in the OpenAI-compatible chunk or a separate event
-                # Here we embed it into the data object
                 data = {
                     "id": f"trace-{int(time.time())}",
                     "object": "chat.completion.chunk",
@@ -81,7 +80,10 @@ async def stream_generator(request: ChatCompletionRequest):
                 }
                 yield f"data: {json.dumps(data)}\n\n"
 
-
     except Exception as e:
-        err_data = {"error": str(e)}
-        yield f"data: {json.dumps(err_data)}\n\n"
+        import traceback
+        err_msg = f"INTERNAL_ERROR: {str(e)}\n{traceback.format_exc()}"
+        print(f">>> [API] Stream Error: {err_msg}", flush=True)
+        # 即使报错，也通过 data 流发送，确保前端诊断终端能显示 Raw 日志
+        yield f"data: {json.dumps({'error': str(e), 'choices': [{'delta': {'content': f'\\n[System Error] {str(e)}'}}]})}\n\n"
+        yield f"DEBUG_RAW: {err_msg}\n\n"

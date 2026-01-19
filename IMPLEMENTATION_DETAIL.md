@@ -9,6 +9,11 @@
 *   `Timestamp`: 微秒级精度时间戳。
 *   `Endpoint`: 实际调用的 API 路径或虚拟内部路径（如 `internal://payload-factory`）。
 
+#### 1.1.1 轨迹归一化 (Trace Normalization)
+为解决微服务内部复杂组件暴露导致的视图混乱，系统引入了 Trace 归一化策略：
+*   **Pipeline 归一**: `HistoryLoader`, `TokenLimitPass` 等内部组件产生的 Trace，其 `Source` 和 `Target` 被强制重写为 `Core`，形成 Core 内部自环。原始组件名保存在 `Data.internal_component` 中供详情页展示。
+*   **LLM 三段式**: LLM 交互被精简为标准的“发送 -> 处理 -> 返回”三段式。中间的复杂流式传输过程被隐藏，仅保留总耗时。
+
 ### 1.2 排序与纠偏逻辑
 为了在前端准确还原时序，系统采用了多维排序策略：
 1.  **后端顺序生成**：在同一执行块中生成的 Trace，通过 1 微秒的强制偏移确保 `Timestamp` 严格递增。
@@ -19,6 +24,7 @@
 *   **激活条 (Activation Bars)**：模拟 UML 顺序图，展示节点在特定交互中的“忙碌”状态。
 *   **流合并 (Stream Merging)**：自动将 `Streaming Content` 序列折叠为单一动作，并聚合显示总持续时间。
 *   **交互式详情**：点击连线可实时查看包含 API Endpoint 和原始 JSON Payload 的元数据。
+*   **Mermaid 导出**: 支持右键将 Trace 数据转换为标准 Mermaid `sequenceDiagram` 语法，方便复制到文档或调试。
 
 ### 1.4 数据脱敏与格式化 (Data Sanitization)
 为了保证观测器展示的专业性与安全性，系统在记录 Trace 前会执行数据脱敏：
@@ -38,3 +44,13 @@
 ## 3. 多语言模型网关 (Python LLM Gateway)
 *   **动态适配**：支持在线注入 Python 脚本，通过 `importlib` 动态加载模型适配器。
 *   **协议转换**：将各家厂商非标的 SSE 格式统一转换为标准 JSON 流，并注入 Tracing 信息。
+*   **适配器诊断**: 内置诊断工具，通过模拟请求测试模型配置的连通性和流式响应能力。
+
+## 4. Core 上下文引擎 (Context Engine)
+Core 服务采用 Pipeline + Pass 架构：
+*   **Pipeline**: 管理一组有序执行的 Pass，并负责 Trace 的自动收集与上下文对象的生命周期管理。
+*   **ContextData**: 类似于“黑板模式”的共享数据结构，包含 SessionID、Messages、Meta 和 Traces。
+*   **Pass**: 原子化的处理单元。
+    *   `HistoryLoader`: 从 DB 加载历史。
+    *   `SystemPromptPass`: 注入系统提示词。
+    *   `TokenLimitPass`: 基于 Tiktoken 进行上下文压缩与截断。

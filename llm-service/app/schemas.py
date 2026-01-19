@@ -11,7 +11,8 @@ class ChatCompletionRequest(BaseModel):
     stream: bool = False
     temperature: Optional[float] = 1.0
     max_tokens: Optional[int] = None
-    # Add other OpenAI-compatible fields as needed
+    is_diagnostic: bool = False # [NEW] flag for diagnostic tests
+
 
 class ModelAdapterConfig(BaseModel):
     id: str

@@ -1,5 +1,9 @@
 import { useState, useEffect } from 'react';
-import { Box, Code2, Plus, Save, Trash2, Play, Globe, Settings2, ChevronUp, ChevronDown, Terminal } from 'lucide-react';
+import { Box, Code2, Plus, Save, Trash2, Play, Globe, Settings2, ChevronUp, ChevronDown, Terminal, Keyboard } from 'lucide-react';
+import CodeMirror from '@uiw/react-codemirror';
+import { python } from '@codemirror/lang-python';
+import { oneDark } from '@codemirror/theme-one-dark';
+import { vim } from '@replit/codemirror-vim';
 import type { ModelAdapterConfig } from '../../types';
 
 export function ModelsView({ onBack }: { onBack: () => void }) {
@@ -12,6 +16,7 @@ export function ModelsView({ onBack }: { onBack: () => void }) {
   const [isTesting, setIsTesting] = useState(false);
   const [isTerminalExpanded, setIsTerminalExpanded] = useState(false);
   const [activeTab, setActiveTab] = useState<'main' | 'advanced'>('main');
+  const [isVimMode, setIsVimMode] = useState(false);
 
   useEffect(() => {
     fetchModels();
@@ -137,7 +142,8 @@ export function ModelsView({ onBack }: { onBack: () => void }) {
         body: JSON.stringify({
           model: selectedModel.id,
           messages: [{ role: 'user', content: 'Hello! Just testing connection.' }],
-          stream: true
+          stream: true,
+          is_diagnostic: true
         })
       });
 
@@ -317,11 +323,21 @@ export function ModelsView({ onBack }: { onBack: () => void }) {
               {activeTab === 'main' ? (
                 selectedModel.type === 'custom' ? (
                   /* Python Editor Mode */
-                  <div className="flex-1 flex flex-col bg-slate-950 overflow-hidden">
-                    <div className="bg-slate-900/50 text-slate-500 px-6 py-2 text-[9px] font-mono flex items-center justify-between">
-                       <div className="flex items-center gap-2">
-                         <div className="w-1.5 h-1.5 rounded-full bg-amber-500"></div>
-                         <span>ADAPTER_SCRIPT.PY</span>
+                  <div className="flex-1 flex flex-col bg-[#282c34] overflow-hidden">
+                    <div className="bg-slate-900/50 text-slate-500 px-6 py-2 text-[9px] font-mono flex items-center justify-between border-b border-white/5">
+                       <div className="flex items-center gap-4">
+                         <div className="flex items-center gap-2">
+                           <div className="w-1.5 h-1.5 rounded-full bg-amber-500"></div>
+                           <span>ADAPTER_SCRIPT.PY</span>
+                         </div>
+                         <div className="h-3 w-[1px] bg-white/10"></div>
+                         <button 
+                            onClick={() => setIsVimMode(!isVimMode)}
+                            className={`flex items-center gap-1.5 px-2 py-0.5 rounded transition-all ${isVimMode ? 'bg-amber-500/20 text-amber-500 font-bold' : 'hover:text-slate-300'}`}
+                         >
+                            <Keyboard size={10} />
+                            <span>VIM MODE: {isVimMode ? 'ON' : 'OFF'}</span>
+                         </button>
                        </div>
                        <button 
                           onClick={() => {
@@ -333,20 +349,27 @@ export function ModelsView({ onBack }: { onBack: () => void }) {
                           填充标准模板
                        </button>
                     </div>
-                    <textarea
-                      className="flex-1 bg-transparent text-emerald-400 p-8 font-mono text-sm outline-none resize-none leading-relaxed"
-                      value={selectedModel.script_content || ''}
-                      onChange={e => setSelectedModel({...selectedModel, script_content: e.target.value})}
-                      onKeyDown={e => {
-                        if (e.key === 'Tab') {
-                          e.preventDefault();
-                          // 使用 insertText 命令插入 4 个空格
-                          // 这种方式会自动处理光标位置并保留撤销历史
-                          document.execCommand('insertText', false, '    ');
-                        }
-                      }}
-                      spellCheck={false}
-                    />
+                    <div className="flex-1 overflow-hidden">
+                      <CodeMirror
+                        value={selectedModel.script_content || ''}
+                        height="100%"
+                        theme={oneDark}
+                        extensions={[
+                          python(),
+                          ...(isVimMode ? [vim()] : [])
+                        ]}
+                        onChange={(value) => setSelectedModel({...selectedModel, script_content: value})}
+                        className="h-full text-sm"
+                        basicSetup={{
+                          lineNumbers: true,
+                          foldGutter: true,
+                          highlightActiveLine: true,
+                          dropCursor: true,
+                          allowMultipleSelections: true,
+                          indentOnInput: true,
+                        }}
+                      />
+                    </div>
                   </div>
                 ) : (
                   /* Built-in Form Mode */

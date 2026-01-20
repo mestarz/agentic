@@ -49,13 +49,17 @@ func getLLMServiceURL() string {
 func main() {
 	// 1. 初始化持久化层
 	sessionDir := getSessionDir()
+	testcaseDir := filepath.Join(filepath.Dir(sessionDir), "testcases")
 	llmServiceURL := getLLMServiceURL()
 	log.Printf("[CORE] Session storage: %s", sessionDir)
+	log.Printf("[CORE] TestCase storage: %s", testcaseDir)
 	log.Printf("[CORE] LLM Service URL: %s", llmServiceURL)
+	
 	repo, _ := persistence.NewFileHistoryRepository(sessionDir)
+	tcRepo, _ := persistence.NewFileTestCaseRepository(testcaseDir)
 
 	// 2. 初始化核心服务
-	hSvc := history.NewService(repo)
+	hSvc := history.NewService(repo, tcRepo)
 	cEng := context.NewEngine(hSvc, llmServiceURL)
 	cSvc := context.NewService(hSvc, cEng)
 
@@ -72,6 +76,8 @@ func main() {
 	admin := api.NewAdminHandler(hSvc)
 	mux.HandleFunc("/api/admin/sessions", admin.ServeSessions)
 	mux.HandleFunc("/api/admin/sessions/", admin.ServeSessions)
+	mux.HandleFunc("/api/admin/testcases", admin.ServeTestCases)
+	mux.HandleFunc("/api/admin/testcases/", admin.ServeTestCases)
 
 	// 4. 启动服务
 	log.Printf("[CORE] Listening on 9091...")

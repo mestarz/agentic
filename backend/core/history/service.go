@@ -7,13 +7,62 @@ import (
 	"time"
 )
 
-// Service 提供会话历史的增删改查服务
+// Service 提供会话历史和测试用例的增删改查服务
 type Service struct {
-	repo *persistence.FileHistoryRepository
+	repo   *persistence.FileHistoryRepository
+	tcRepo *persistence.FileTestCaseRepository
 }
 
 // NewService 创建一个新的 Service 实例
-func NewService(repo *persistence.FileHistoryRepository) *Service { return &Service{repo: repo} }
+func NewService(repo *persistence.FileHistoryRepository, tcRepo *persistence.FileTestCaseRepository) *Service {
+	return &Service{repo: repo, tcRepo: tcRepo}
+}
+
+// CreateTestCaseFromSession 将现有会话转换为测试用例
+func (s *Service) CreateTestCaseFromSession(ctx context.Context, sessionID, name string) (*domain.TestCase, error) {
+	session, err := s.repo.GetSession(ctx, sessionID)
+	if err != nil {
+		return nil, err
+	}
+
+	var prompts []string
+	for _, m := range session.Messages {
+		if m.Role == domain.RoleUser {
+			prompts = append(prompts, m.Content)
+		}
+	}
+
+	tc := &domain.TestCase{
+		ID:        "tc-" + time.Now().Format("20060102150405"),
+		Name:      name,
+		AppID:     session.AppID,
+		Prompts:   prompts,
+		CreatedAt: time.Now(),
+	}
+
+	err = s.tcRepo.SaveTestCase(ctx, tc)
+	return tc, err
+}
+
+// ListTestCases 列出所有测试用例
+func (s *Service) ListTestCases(ctx context.Context) ([]*domain.TestCaseSummary, error) {
+	return s.tcRepo.ListTestCases(ctx)
+}
+
+// GetTestCase 获取测试用例详情
+func (s *Service) GetTestCase(ctx context.Context, id string) (*domain.TestCase, error) {
+	return s.tcRepo.GetTestCase(ctx, id)
+}
+
+// DeleteTestCase 删除测试用例
+func (s *Service) DeleteTestCase(ctx context.Context, id string) error {
+	return s.tcRepo.DeleteTestCase(ctx, id)
+}
+
+// SaveTestCase 保存或更新测试用例
+func (s *Service) SaveTestCase(ctx context.Context, tc *domain.TestCase) error {
+	return s.tcRepo.SaveTestCase(ctx, tc)
+}
 
 // GetOrCreateSession 获取现有会话或创建新会话
 func (s *Service) GetOrCreateSession(ctx context.Context, id, appID string) (*domain.Session, error) {

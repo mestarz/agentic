@@ -10,16 +10,16 @@ import { SequenceObserver } from './components/observer/SequenceObserver';
 import { DocsView } from './components/docs/DocsView';
 import { SettingsView } from './components/settings/SettingsView';
 import { ModelsView } from './components/models/ModelsView';
+import { TestCasesView } from './components/chat/TestCasesView';
 
 function App() {
-  const [view, setView] = useState<'chat' | 'docs' | 'settings' | 'models'>('chat');
+  const [view, setView] = useState<'chat' | 'docs' | 'settings' | 'models' | 'testcases'>('chat');
   const [activeTraceIndex, setActiveTraceIndex] = useState<number | null>(null);
   const [selectedTraceId, setSelectedTraceId] = useState<number | null>(null);
   const [isObserverExpanded, setIsObserverExpanded] = useState(false);
 
   const { appConfigs, setAppConfigs } = useConfig();
   
-  // [NEW] 全局配置自愈逻辑：启动时自动对齐可用模型
   useEffect(() => {
     fetch('/api/models/models')
       .then(res => res.json())
@@ -29,27 +29,20 @@ function App() {
           setAppConfigs(prev => {
             const next = { ...prev };
             let changed = false;
-            
-            // 策略：如果当前 ID 是默认的 'mock-model' 或者当前 ID 在列表中已经找不到了
-            // 则强制对齐到模型列表中的第一个模型
             if (prev.agentModelID === 'mock-model' || !models.find(m => m.id === prev.agentModelID)) {
-              console.log(`>>> [Config] 自动对齐 Agent 模型: ${models[0].id}`);
               next.agentModelID = models[0].id;
               changed = true;
             }
-            
             if (prev.coreModelID === 'mock-model' || !models.find(m => m.id === prev.coreModelID)) {
-              console.log(`>>> [Config] 自动对齐 Core 模型: ${models[0].id}`);
               next.coreModelID = models[0].id;
               changed = true;
             }
-            
             return changed ? next : prev;
           });
         }
       })
       .catch(e => console.error("Auto-sync failed", e));
-  }, []); // 仅在应用挂载时运行一次
+  }, []);
 
   const {
     sessions,
@@ -66,7 +59,10 @@ function App() {
     toggleSelectAll
   } = useSessions();
 
-  const { input, setInput, loading, handleSend, handleStop, liveLogs } = useChat({
+  const { 
+    input, setInput, loading, handleSend, handleStop, liveLogs, 
+    isReplaying, replayProgress, startReplay 
+  } = useChat({
     currentSession,
     setCurrentSession,
     setSelectedId,
@@ -79,7 +75,21 @@ function App() {
     setActiveTraceIndex(null);
   };
 
-  // 定义通用的过渡样式常量，减少类名冗余
+  const handleRunTestCase = async (tcId: string) => {
+    try {
+      const resp = await fetch(`/api/admin/testcases/${tcId}`);
+      const tc = await resp.json();
+      if (tc && tc.prompts) {
+        setView('chat');
+        setTimeout(() => {
+          startReplay(tc.prompts);
+        }, 100);
+      }
+    } catch (e) {
+      console.error("Failed to load test case", e);
+    }
+  };
+
   const transitionClass = "transition-all duration-500 [transition-timing-function:cubic-bezier(0.4,0,0.2,1)] will-change-[width,flex,opacity,transform]";
 
   return (
@@ -132,6 +142,8 @@ function App() {
                 handleStop={handleStop}
                 loading={loading}
                 logs={liveLogs}
+                isReplaying={isReplaying}
+                replayProgress={replayProgress}
               />
             </div>
           </div>
@@ -164,6 +176,13 @@ function App() {
           onBack={() => setView('chat')} 
           appConfigs={appConfigs}
           setAppConfigs={setAppConfigs}
+        />
+      )}
+
+      {view === 'testcases' && (
+        <TestCasesView 
+          onBack={() => setView('chat')}
+          onRun={handleRunTestCase}
         />
       )}
     </div>

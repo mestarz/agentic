@@ -17,6 +17,8 @@ logs/
 data/sessions/*.json
 backend/core/data/sessions/
 !data/sessions/.gitkeep
+!data/testcases/*.json
+!data/testcases/.gitkeep
 
 # Go
 vendor/

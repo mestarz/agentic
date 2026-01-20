@@ -51,6 +51,22 @@ Core 服务采用 Pipeline + Pass 架构：
 *   **Pipeline**: 管理一组有序执行的 Pass，并负责 Trace 的自动收集与上下文对象的生命周期管理。
 *   **ContextData**: 类似于“黑板模式”的共享数据结构，包含 SessionID、Messages、Meta 和 Traces。
 *   **Pass**: 原子化的处理单元。
-    *   `HistoryLoader`: 从 DB 加载历史。
-    *   `SystemPromptPass`: 注入系统提示词。
-    *   `TokenLimitPass`: 基于 Tiktoken 进行上下文压缩与截断。
+        *   `HistoryLoader`: 从持久化库加载历史。
+        *   `SummarizerPass`: [NEW] 使用 LLM 对历史进行语义摘要，实现无限长对话感知。
+        *   `SystemPromptPass`: 注入系统提示词。
+        *   `TokenLimitPass`: 基于 Tiktoken 进行物理截断。
+    
+    ## 5. 自动化测试与重放 (Test & Replay)
+    
+    ### 5.1 测试用例持久化 (Git-Tracked Persistence)
+    *   **物理存储**：测试用例以 JSON 格式存储在 `data/testcases/` 目录下。
+    *   **Git 集成**：与普通的 `data/sessions/` (Ignored) 不同，测试用例目录配置为 Git 跟踪，确保评估集可随代码版本同步演进。
+    *   **提取算法**：后台服务仅提取 `role: user` 的文本序列，确保重放时能触发模型针对相同指令的不同响应。
+    
+    ### 5.2 自动重放状态机 (Async Replay State Machine)
+    重放逻辑实现在前端 `useChat` 钩子中，采用 Promise 驱动的循环：
+    1.  **环境隔离**：重放启动时会自动创建 `test-XXXX` 前缀的临时 Session。
+    2.  **流式同步**：利用 SSE 的 `[DONE]` 标记作为当前回合结束的信号。通过 `await` handleSend 异步等待模型回复完全吐出。
+    3.  **进度反馈**：实时更新 `replayProgress` 状态，驱动 UI 进度条展示。
+    4.  **容错机制**：捕获单轮交互异常（如 HTTP 500 或网关超时），自动终止重放并记录错误日志。
+    

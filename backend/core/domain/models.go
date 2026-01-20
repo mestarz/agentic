@@ -45,3 +45,20 @@ type SessionSummary struct {
 	UpdatedAt time.Time `json:"updated_at"`
 	MsgCount  int       `json:"msg_count"`
 }
+
+// TestCase 代表一个可重现的测试用例
+type TestCase struct {
+	ID        string    `json:"id"`
+	Name      string    `json:"name"`
+	AppID     string    `json:"app_id"`
+	Prompts   []string  `json:"prompts"` // 提取自 User 消息的内容列表
+	CreatedAt time.Time `json:"created_at"`
+}
+
+// TestCaseSummary 测试用例摘要
+type TestCaseSummary struct {
+	ID        string    `json:"id"`
+	Name      string    `json:"name"`
+	CreatedAt time.Time `json:"created_at"`
+	StepCount int       `json:"step_count"`
+}

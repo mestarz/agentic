@@ -156,6 +156,13 @@ func (s *AgentService) Chat(ctx context.Context, id, query string, agentModelID,
 	var collectedTraces []domain.TraceEvent
 
 	send := func(resp SSEResponse) {
+		// 检查 context 是否已结束，避免向已关闭的 channel 发送数据导致 panic
+		select {
+		case <-ctx.Done():
+			return
+		default:
+		}
+
 		if resp.Type == "trace" && resp.Trace != nil {
 			if resp.Trace.Timestamp.IsZero() {
 				resp.Trace.Timestamp = time.Now()

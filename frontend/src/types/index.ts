@@ -29,6 +29,21 @@ export interface SessionSummary {
   msg_count: number;
 }
 
+export interface TestCase {
+  id: string;
+  name: string;
+  app_id: string;
+  prompts: string[];
+  created_at: string;
+}
+
+export interface TestCaseSummary {
+  id: string;
+  name: string;
+  created_at: string;
+  step_count: number;
+}
+
 
 export interface ModelAdapterConfig {
   id: string;

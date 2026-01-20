@@ -22,9 +22,12 @@ ContextFabric 是一个专业的上下文治理中间件。它通过将“应用
     2.  `SummarizerPass`: LLM 语义摘要压缩（长会话自动触发）。
     3.  `SystemPromptPass`: 注入系统提示词。
     4.  `TokenLimitPass`: 物理 Token 截断兜底。
-    *   **持久化**: 负责原始对话历史的读写，并存储 Pipeline Trace 轨迹。
+    *   **测试与评估**:
+        *   **测试用例 (TestCase)**: 支持从现有对话中提取 User 文本并独立持久化。
+        *   **自动化重放**: 提供基于用例的自动化对话重放，用于模型效果回归测试。
+    *   **持久化**: 负责原始对话历史和测试用例的读写，并存储 Pipeline Trace 轨迹。
     *   **上下文加工**: 使用专业 `tiktoken-go` 库执行精准 Token 计算与截断。
-    *   **会话管理**: 提供单条及批量会话删除功能。
+    *   **会话管理**: 提供会话重命名、单条及批量删除功能。
 
 ### 2.2. Agent Service (应用网关)
 *   **监听端口**: 9090
@@ -42,8 +45,10 @@ ContextFabric 是一个专业的上下文治理中间件。它通过将“应用
 | `/api/v1/sessions` | `POST` | 初始化会话空间。 |
 | `/api/v1/context` | `POST` | **核心**: 输入 Query，返回优化后的 Prompt。 |
 | `/api/v1/messages` | `POST` | 将回复记入历史，同时支持持久化 Traces 记录。 |
+| `/api/admin/sessions/:id` | `PATCH` | 重命名指定会话。 |
 | `/api/admin/sessions/:id` | `DELETE` | 删除指定会话文件。 |
-| `/api/admin/sessions` | `DELETE` | 批量删除会话（Body 为 ID 数组）。 |
+| `/api/admin/testcases` | `GET/POST` | 获取用例列表或保存新用例。 |
+| `/api/admin/testcases/:id` | `GET/PUT/DELETE` | 获取、更新或删除特定测试用例。 |
 
 ---
 

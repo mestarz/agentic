@@ -1,5 +1,5 @@
 import { useRef, useEffect, useState } from 'react';
-import { Zap, Cpu, User, Bot, Send, Square, Terminal, ChevronDown, ChevronUp } from 'lucide-react';
+import { Zap, Cpu, User, Bot, Send, Square, Terminal, ChevronDown, ChevronUp, Beaker, Check, Save } from 'lucide-react';
 import type { Session, AppConfigs, TraceEvent } from '../../types';
 import { Markdown } from '../ui/Markdown';
 
@@ -14,7 +14,9 @@ interface ChatWindowProps {
   handleSend: () => void;
   handleStop: () => void;
   loading: boolean;
-  logs?: string[]; // [NEW] Accept logs for real-time display
+  logs?: string[];
+  isReplaying?: boolean;
+  replayProgress?: { current: number, total: number };
 }
 
 export function ChatWindow({
@@ -28,25 +30,72 @@ export function ChatWindow({
   handleSend,
   handleStop,
   loading,
-  logs = []
+  logs = [],
+  isReplaying = false,
+  replayProgress = { current: 0, total: 0 }
 }: ChatWindowProps) {
   const scrollRef = useRef<HTMLDivElement>(null);
   const terminalScrollRef = useRef<HTMLDivElement>(null);
   const [isTerminalExpanded, setIsTerminalExpanded] = useState(false);
+  const [isSavingTestCase, setIsSavingTestCase] = useState(false);
+  const [saveSuccess, setSaveSuccess] = useState(false);
 
   useEffect(() => { 
     if (scrollRef.current) scrollRef.current.scrollTop = scrollRef.current.scrollHeight; 
   }, [currentSession?.messages]);
 
-  // [NEW] 自动滚动终端到底部
   useEffect(() => {
     if (isTerminalExpanded && terminalScrollRef.current) {
         terminalScrollRef.current.scrollTop = terminalScrollRef.current.scrollHeight;
     }
   }, [logs, isTerminalExpanded]);
 
+  const handleSaveTestCase = async () => {
+    if (!currentSession || isSavingTestCase) return;
+    const name = prompt("请输入测试用例名称:", `Test Case - ${currentSession.id}`);
+    if (!name) return;
+
+    setIsSavingTestCase(true);
+    try {
+      const resp = await fetch('/api/admin/testcases', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ session_id: currentSession.id, name })
+      });
+      if (resp.ok) {
+        setSaveSuccess(true);
+        setTimeout(() => setSaveSuccess(false), 2000);
+      }
+    } catch (e) {
+      console.error("Failed to save test case", e);
+    } finally {
+      setIsSavingTestCase(false);
+    }
+  };
+
   return (
-    <main className="flex-1 h-full flex flex-col min-w-0 bg-white overflow-hidden">
+    <main className="flex-1 h-full flex flex-col min-w-0 bg-white overflow-hidden relative">
+      {/* Replay Overlay Overlay */}
+      {isReplaying && (
+        <div className="absolute top-16 left-0 right-0 z-20 px-8 py-3 bg-amber-50 border-b border-amber-100 flex items-center justify-between shadow-sm animate-in slide-in-from-top duration-300">
+          <div className="flex items-center gap-3 text-amber-700">
+            <div className="w-6 h-6 rounded-full bg-amber-200 flex items-center justify-center animate-pulse">
+              <Beaker size={14} className="text-amber-600" />
+            </div>
+            <span className="text-xs font-black uppercase tracking-widest">测试用例自动重放中...</span>
+          </div>
+          <div className="flex items-center gap-4">
+            <span className="text-xs font-mono font-bold text-amber-600">步骤 {replayProgress.current} / {replayProgress.total}</span>
+            <div className="w-32 h-1.5 bg-amber-200 rounded-full overflow-hidden">
+              <div 
+                className="h-full bg-amber-600 transition-all duration-500 ease-out" 
+                style={{ width: `${(replayProgress.current / replayProgress.total) * 100}%` }}
+              ></div>
+            </div>
+          </div>
+        </div>
+      )}
+
       <header className="h-16 border-b border-slate-100 flex items-center justify-between px-6 bg-white/50 backdrop-blur-md z-10 shadow-sm shrink-0">
         <div className="flex items-center gap-4">
           <div className="flex items-center gap-2 text-[9px] font-black text-slate-400 uppercase">
@@ -58,6 +107,20 @@ export function ChatWindow({
           <h2 className="text-sm font-semibold text-slate-700">{selectedId || '实验性控制台'}</h2>
         </div>
         <div className="flex items-center gap-3">
+          {currentSession && currentSession.messages.length > 0 && !isReplaying && (
+            <button 
+              onClick={handleSaveTestCase}
+              disabled={isSavingTestCase}
+              className={`flex items-center gap-2 px-3 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-widest transition-all ${
+                saveSuccess 
+                ? 'bg-emerald-500 text-white shadow-emerald-100' 
+                : 'bg-white border border-slate-200 text-slate-500 hover:border-indigo-500 hover:text-indigo-600'
+              }`}
+            >
+              {saveSuccess ? <Check size={12} /> : <Save size={12} />}
+              {saveSuccess ? '已保存' : '保存为测试用例'}
+            </button>
+          )}
           {currentSession?.messages && (
             (() => {
               const stats = [...currentSession.messages].reverse().find(m => m.meta?.tokens_total)?.meta;

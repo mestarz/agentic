@@ -21,7 +21,13 @@ func (s *Service) GetOrCreateSession(ctx context.Context, id, appID string) (*do
 	if err == nil {
 		return session, nil
 	}
-	newS := &domain.Session{ID: id, AppID: appID, CreatedAt: time.Now(), UpdatedAt: time.Now(), Messages: []domain.Message{}}
+	newS := &domain.Session{
+		ID:        id,
+		AppID:     appID,
+		CreatedAt: time.Now(),
+		UpdatedAt: time.Now(),
+		Messages:  []domain.Message{},
+	}
 	s.repo.SaveSession(ctx, newS)
 	return newS, nil
 }
@@ -65,4 +71,15 @@ func (s *Service) Delete(ctx context.Context, id string) error {
 // DeleteBatch 批量删除会话
 func (s *Service) DeleteBatch(ctx context.Context, ids []string) error {
 	return s.repo.DeleteSessions(ctx, ids)
+}
+
+// Rename 重命名会话
+func (s *Service) Rename(ctx context.Context, id, newName string) error {
+	session, err := s.repo.GetSession(ctx, id)
+	if err != nil {
+		return err
+	}
+	session.Name = newName
+	session.UpdatedAt = time.Now()
+	return s.repo.SaveSession(ctx, session)
 }

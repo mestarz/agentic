@@ -283,7 +283,7 @@ func (s *AgentService) Chat(ctx context.Context, id, query string, agentModelID,
 
 	err = s.llmGateway.ChatStream(ctx, agentModelID, payload, internal)
 	if err != nil {
-		send(SSEResponse{Type: "chunk", Content: "Error from LLM Gateway: " + err.Error()})
+		send(SSEResponse{Type: "chunk", Content: "LLM 网关错误: " + err.Error()})
 	}
 	
 	close(internal)

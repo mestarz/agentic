@@ -85,5 +85,6 @@ async def stream_generator(request: ChatCompletionRequest):
         err_msg = f"INTERNAL_ERROR: {str(e)}\n{traceback.format_exc()}"
         print(f">>> [API] Stream Error: {err_msg}", flush=True)
         # 即使报错，也通过 data 流发送，确保前端诊断终端能显示 Raw 日志
-        yield f"data: {json.dumps({'error': str(e), 'choices': [{'delta': {'content': f'\\n[System Error] {str(e)}'}}]})}\n\n"
+        yield f"data: {json.dumps({'error': str(e), 'choices': [{'delta': {'content': f'\\n[系统错误] {str(e)}'}}]})}\n\n"
         yield f"DEBUG_RAW: {err_msg}\n\n"
+        

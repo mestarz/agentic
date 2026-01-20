@@ -56,9 +56,6 @@ export function SequenceObserver({
     'Model Processing': '模型推理中',
     'Model Response': '接收模型响应',
     // Pipeline
-    'Start': '管线启动',
-    'Finished': '管线结束',
-    'Loaded': '加载数据',
     'Truncate': '截断超长文本',
     'Complete': 'Pass 执行完成',
     // LLM
@@ -128,10 +125,6 @@ export function SequenceObserver({
     let streamingStart: any = null;
 
     sorted.forEach((t) => {
-      // 过滤掉冗余或固定的管线元数据 Trace，使视图更聚焦于核心逻辑
-      const redundantActions = ['Start', 'Finished', 'Loaded'];
-      if (redundantActions.includes(t.action)) return;
-
       const isStreamStart = t.action === 'Streaming Content';
       const isStreamEnd = t.action === 'Stream Complete' || t.action === 'Final Response';
 
@@ -450,6 +443,26 @@ export function SequenceObserver({
                               <div className="text-xs text-slate-600 font-sans leading-relaxed whitespace-pre-wrap max-h-32 overflow-y-auto custom-scrollbar bg-white/50 p-2 rounded-lg border border-slate-100/50">
                                 {m.content}
                               </div>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+
+                    {/* 新增：内部执行日志展示 (针对折叠后的 Pass) */}
+                    {currentTrace.data?.internal_logs && Array.isArray(currentTrace.data.internal_logs) && (
+                      <div className="space-y-3">
+                        <div className="text-[10px] font-black text-slate-400 uppercase tracking-wider">执行详情 (Internal Details)</div>
+                        <div className="space-y-2">
+                          {currentTrace.data.internal_logs.map((log: any, i: number) => (
+                            <div key={i} className="bg-slate-900 rounded-xl p-3 border border-slate-800">
+                               <div className="flex items-center justify-between mb-2">
+                                 <span className="text-[10px] font-black text-amber-500 uppercase">{log.internal_action}</span>
+                                 <span className="text-[9px] font-mono text-slate-500">{log.internal_component}</span>
+                               </div>
+                               <pre className="text-[10px] text-slate-400 font-mono overflow-x-auto">
+                                 {JSON.stringify(log, (k, v) => (['internal_action', 'internal_component'].includes(k) ? undefined : v), 2)}
+                               </pre>
                             </div>
                           ))}
                         </div>

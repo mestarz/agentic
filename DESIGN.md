@@ -17,7 +17,11 @@ ContextFabric 是一个专业的上下文治理中间件。它通过将“应用
 ### 2.1. Core Service (核心引擎)
 *   **监听端口**: 9091
 *   **职责**:
-    *   **Pipeline 引擎**: 采用 `Pass` 管道架构处理上下文。每个请求经过 `HistoryLoader` -> `SystemPromptPass` -> `TokenLimitPass` 等一系列原子化 Pass 处理。
+    *   **Pipeline 引擎**: 采用 `Pass` 插件化架构处理上下文。每个请求依次经过：
+    1.  `HistoryLoader`: 加载历史会话。
+    2.  `SummarizerPass`: LLM 语义摘要压缩（长会话自动触发）。
+    3.  `SystemPromptPass`: 注入系统提示词。
+    4.  `TokenLimitPass`: 物理 Token 截断兜底。
     *   **持久化**: 负责原始对话历史的读写，并存储 Pipeline Trace 轨迹。
     *   **上下文加工**: 使用专业 `tiktoken-go` 库执行精准 Token 计算与截断。
     *   **会话管理**: 提供单条及批量会话删除功能。

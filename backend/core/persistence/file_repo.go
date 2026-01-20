@@ -70,10 +70,11 @@ func (r *FileHistoryRepository) ListSessions(ctx context.Context) ([]*domain.Ses
 		var s domain.Session
 		json.Unmarshal(data, &s)
 		list = append(list, &domain.SessionSummary{
-			ID: s.ID, 
-			AppID: s.AppID, 
-			UpdatedAt: s.UpdatedAt, 
-			MsgCount: len(s.Messages),
+			ID:        s.ID,
+			Name:      s.Name,
+			AppID:     s.AppID,
+			UpdatedAt: s.UpdatedAt,
+			MsgCount:  len(s.Messages),
 		})
 	}
 	

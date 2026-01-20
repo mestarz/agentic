@@ -16,9 +16,19 @@ export interface Message {
 
 export interface Session {
   id: string;
+  name?: string;
   app_id: string;
   messages: Message[];
 }
+
+export interface SessionSummary {
+  id: string;
+  name?: string;
+  app_id: string;
+  updated_at: string;
+  msg_count: number;
+}
+
 
 export interface ModelAdapterConfig {
   id: string;

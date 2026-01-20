@@ -113,17 +113,17 @@ class AdapterManager:
                             yield str(res)
                 else:
                     if request.is_diagnostic:
-                        yield "Error: 'generate_stream' function not found in script.\n"
+                        yield "错误: 脚本中未找到 'generate_stream' 函数。\n"
                 
                 print("DEBUG: Script execution finished", flush=True)
             except Exception as e:
                 import traceback
                 print(f"DEBUG: Error in custom script execution: {e}", flush=True)
                 if request.is_diagnostic:
-                    yield f"Execution Error:\n{traceback.format_exc()}\n"
+                    yield f"执行错误:\n{traceback.format_exc()}\n"
                 else:
                     # 将错误信息包装成标准流式格式，确保前端能收到
-                    yield f"Error: {str(e)}"
+                    yield f"错误: {str(e)}"
         
         # 2. 如果是标准厂商类型
         else:
@@ -175,7 +175,7 @@ class AdapterManager:
                 async with client.stream("POST", full_endpoint, json=payload, headers=headers) as resp:
                     if resp.status_code != 200:
                         err_body = await resp.aread()
-                        yield f"Error: {resp.status_code} - {err_body.decode()}"
+                        yield f"错误: {resp.status_code} - {err_body.decode()}"
                         return
 
                     async for line in resp.aiter_lines():
@@ -191,6 +191,6 @@ class AdapterManager:
                             except:
                                 continue
             except Exception as e:
-                yield f"Connection Error: [{type(e).__name__}] {str(e)}"
+                yield f"连接错误: [{type(e).__name__}] {str(e)}"
 
 manager = AdapterManager()

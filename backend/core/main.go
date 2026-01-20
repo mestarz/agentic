@@ -38,15 +38,25 @@ func getSessionDir() string {
 	return filepath.Join(home, ".agentic", "sessions")
 }
 
+// getLLMServiceURL 获取核心引擎调用摘要模型所需的 LLM 网关地址
+func getLLMServiceURL() string {
+	if url := os.Getenv("LLM_SERVICE_URL"); url != "" {
+		return url
+	}
+	return "http://localhost:8000"
+}
+
 func main() {
 	// 1. 初始化持久化层
 	sessionDir := getSessionDir()
+	llmServiceURL := getLLMServiceURL()
 	log.Printf("[CORE] Session storage: %s", sessionDir)
+	log.Printf("[CORE] LLM Service URL: %s", llmServiceURL)
 	repo, _ := persistence.NewFileHistoryRepository(sessionDir)
 
 	// 2. 初始化核心服务
 	hSvc := history.NewService(repo)
-	cEng := context.NewEngine(hSvc)
+	cEng := context.NewEngine(hSvc, llmServiceURL)
 	cSvc := context.NewService(hSvc, cEng)
 
 	// 3. 配置路由

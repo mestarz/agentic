@@ -69,6 +69,15 @@ func (h *AdminHandler) ServeSessions(w http.ResponseWriter, r *http.Request) {
 			w.WriteHeader(200)
 			return
 		}
+		if r.Method == http.MethodPatch {
+			var req struct {
+				Name string `json:"name"`
+			}
+			json.NewDecoder(r.Body).Decode(&req)
+			h.history.Rename(r.Context(), id, req.Name)
+			w.WriteHeader(200)
+			return
+		}
 		s, _ := h.history.Get(r.Context(), id)
 		w.Header().Set("Content-Type", "application/json")
 		json.NewEncoder(w).Encode(s)

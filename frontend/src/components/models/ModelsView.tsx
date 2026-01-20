@@ -150,7 +150,7 @@ export function ModelsView({ onBack, appConfigs, setAppConfigs }: ModelsViewProp
       const res = await fetch('/api/models/chat/completions', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ model: selectedModel.id, messages: [{ role: 'user', content: 'Hello!' }], stream: true, is_diagnostic: true })
+        body: JSON.stringify({ model: selectedModel.id, messages: [{ role: 'user', content: '你好！' }], stream: true, is_diagnostic: true })
       });
       if (!res.ok) throw new Error(`连接失败 (HTTP ${res.status}): ${await res.text()}`);
       setTestLogs(prev => [...prev, '> 连接建立成功。[Step 2/2] 等待回复...']);
@@ -172,19 +172,19 @@ export function ModelsView({ onBack, appConfigs, setAppConfigs }: ModelsViewProp
                      const content = JSON.parse(dataStr).choices[0]?.delta?.content;
                      if (content) setTestLogs(prev => {
                          const last = prev[prev.length - 1];
-                         if (last && last.startsWith('> Rcv: ')) return [...prev.slice(0, -1), last + content];
-                         return [...prev, `> Rcv: ${content}`];
+                         if (last && last.startsWith('> 收: ')) return [...prev.slice(0, -1), last + content];
+                         return [...prev, `> 收: ${content}`];
                      });
                  } catch {} 
              } else if (line.trim() !== '' && !line.startsWith(':')) {
-                 setTestLogs(prev => [...prev, `> [Raw]: ${line.substring(0, 150)}`]);
+                 setTestLogs(prev => [...prev, `> [原始数据]: ${line.substring(0, 150)}`]);
              }
           }
         }
       }
       setTestLogs(prev => [...prev, '> 测试结束。']);
     } catch (e: any) {
-      setTestLogs(prev => [...prev, `> Error: ${e.message}`]);
+      setTestLogs(prev => [...prev, `> 错误: ${e.message}`]);
     } finally {
       setIsTesting(false);
     }
@@ -197,11 +197,11 @@ export function ModelsView({ onBack, appConfigs, setAppConfigs }: ModelsViewProp
     api_key = \"YOUR_API_KEY\"
     headers = {\"Authorization\": f\"Bearer {api_key}\"}
     payload = {\"model\": \"deepseek-chat\", \"messages\": [{\"role\": m.role, \"content\": m.content} for m in messages], \"stream\": True}
-    yield f\"--> [Debug] 正在请求: {url}\n\"
+    yield f\"--> [调试] 正在请求: {url}\n\"
     async with httpx.AsyncClient(timeout=60.0) as client:
         async with client.stream(\"POST\", url, json=payload, headers=headers) as resp:
             if resp.status_code != 200:
-                yield f\"--> [Error] 接口报错: {resp.status_code}\n\"
+                yield f\"--> [错误] 接口报错: {resp.status_code}\n\"
                 return
             async for line in resp.aiter_lines():
                 if line.startswith(\"data: \"):
@@ -338,8 +338,8 @@ export function ModelsView({ onBack, appConfigs, setAppConfigs }: ModelsViewProp
                     <h3 className="text-[10px] font-black uppercase tracking-widest text-slate-400">诊断终端</h3>
                   </div>
                   <div className="flex items-center gap-3" onClick={e => e.stopPropagation()}>
-                    <button onClick={() => setTestLogs([])} className="text-[9px] font-black uppercase text-slate-500 hover:text-slate-300">Clear</button>
-                    <button onClick={!isTesting ? runDiagnostics : undefined} className={`flex items-center gap-2 px-4 py-1.5 rounded-full text-[10px] font-black uppercase ${isTesting ? 'bg-slate-800 text-slate-600' : 'bg-emerald-600 text-white hover:bg-emerald-500 shadow-lg shadow-emerald-900/20'}`}><Play size={12} fill="currentColor" /> {isTesting ? 'Testing...' : 'Run Test'}</button>
+                    <button onClick={() => setTestLogs([])} className="text-[9px] font-black uppercase text-slate-500 hover:text-slate-300">清空</button>
+                    <button onClick={!isTesting ? runDiagnostics : undefined} className={`flex items-center gap-2 px-4 py-1.5 rounded-full text-[10px] font-black uppercase ${isTesting ? 'bg-slate-800 text-slate-600' : 'bg-emerald-600 text-white hover:bg-emerald-500 shadow-lg shadow-emerald-900/20'}`}><Play size={12} fill="currentColor" /> {isTesting ? '测试中...' : '运行测试'}</button>
                   </div>
                 </div>
                 <div className="flex-1 p-6 font-mono text-xs overflow-y-auto terminal-scrollbar selection:bg-indigo-500/30">

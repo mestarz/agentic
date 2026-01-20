@@ -28,7 +28,7 @@ func (p *SystemPromptPass) Run(ctx context.Context, data *pipeline.ContextData) 
 	// 构建系统消息
 	sysMsg := domain.Message{
 		Role:      domain.RoleSystem,
-		Content:   "ContextFabric Engine. Time: " + time.Now().Format("15:04:05"),
+		Content:   "你是一个由 ContextFabric 驱动的智能助手。当前系统时间: " + time.Now().Format("15:04:05"),
 		Timestamp: time.Now(),
 	}
 	

@@ -9,6 +9,10 @@ mkdir -p "$LOG_DIR" "$BIN_DIR"
 unset http_proxy https_proxy all_proxy
 export NO_PROXY="localhost,127.0.0.1,0.0.0.0"
 
+# 配置环境变量
+export LLM_SERVICE_URL="http://localhost:8000"
+export AGENTIC_SESSIONS_DIR="$ROOT_DIR/data/sessions"
+
 echo "正在启动 ContextFabric 完全隔离版 (Core + Agent + LLM Gateway)..."
 
 # 0. 启动 LLM Gateway (Python)

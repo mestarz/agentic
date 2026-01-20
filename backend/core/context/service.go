@@ -12,18 +12,24 @@ import (
 // Engine 是上下文处理的核心引擎。
 // 它维护了一个 Pipeline 管线，负责将原始会话历史转换为模型可用的优化负载。
 type Engine struct {
-	pipeline *pipeline.Pipeline
+	pipeline      *pipeline.Pipeline
+	llmServiceURL string
 }
 
 // NewEngine 初始化引擎并配置默认的处理管线。
-// 默认顺序：1. 加载历史 -> 2. 注入系统提示词 -> 3. Token 限制与截断。
-func NewEngine(h *history.Service) *Engine {
+// 默认顺序：1. 加载历史 -> 2. LLM 语义摘要 -> 3. 注入系统提示词 -> 4. Token 限制截断。
+func NewEngine(h *history.Service, llmServiceURL string) *Engine {
 	pl := pipeline.NewPipeline(
 		passes.NewHistoryLoader(h),
+		// 消息数超过 10 条时触发摘要，保留最近 5 条
+		passes.NewSummarizerPass(llmServiceURL, "deepseek-chat", 10, 5),
 		passes.NewSystemPromptPass(),
 		passes.NewTokenLimitPass(4000), // 默认设置 4k 上下文限制
 	)
-	return &Engine{pipeline: pl}
+	return &Engine{
+		pipeline:      pl,
+		llmServiceURL: llmServiceURL,
+	}
 }
 
 // BuildPayload 驱动管线执行，并负责将管线生成的内部 Trace 信息归一化为业务层可理解的格式。
@@ -45,34 +51,59 @@ func (e *Engine) BuildPayload(ctx stdctx.Context, id string, query string, model
 		return nil, err
 	}
 
-	// 3. 将管线执行轨迹 (Traces) 归一化并附着在最后一条消息上，供前端交互图展示。
+	// 3. 处理 Trace 和 Meta
+	// 将 Pipeline 中收集的 Trace 信息转换为 domain.TraceEvent，并附着到最后一条消息上
 	if len(data.Messages) > 0 {
 		lastMsg := &data.Messages[len(data.Messages)-1]
 		
 		var domainTraces []domain.TraceEvent
+		var internalDetails []map[string]interface{}
 		baseTime := time.Now()
 		
-		for i, t := range data.Traces {
+		for _, t := range data.Traces {
 			src, _ := t["source"].(string)
 			act, _ := t["action"].(string)
 			dat, _ := t["data"].(map[string]interface{})
+			if dat == nil {
+				dat = make(map[string]interface{})
+			}
 			
-			// 保存原始组件信息以便深度调试
+			// 3.1 过滤掉冗余的管线级元数据，避免时序图过度拥挤
+			if (src == "Core" || src == "Pipeline") && (act == "Start" || act == "Finished") {
+				continue
+			}
+			if act == "Loaded" { // HistoryLoader 的内部事件
+				continue
+			}
+
+			// 3.2 如果是 Pipeline 的 Complete 事件（即一个 Pass 执行完成）
+			if src == "Pipeline" && act == "Complete" {
+				// 将之前累积的内部细节注入到这个主 Trace 中，实现交互图节点的“折叠”
+				if len(internalDetails) > 0 {
+					dat["internal_logs"] = internalDetails
+					internalDetails = nil // 重置缓冲区
+				}
+				
+				domainTraces = append(domainTraces, domain.TraceEvent{
+					Source:    "Core",
+					Target:    "Core",
+					Action:    act,
+					Data:      dat,
+					Timestamp: baseTime.Add(time.Duration(len(domainTraces)) * time.Microsecond),
+				})
+				continue
+			}
+
+			// 3.3 其他内部业务事件（如 Summarizer 的 Summarized/SummarizeError, TokenLimit 的 Truncate）
+			// 暂时缓存起来，等待下一个 Complete 事件将其打包。
+			dat["internal_action"] = act
 			dat["internal_component"] = src
-			
-			// 归一化策略：管线内的所有活动在宏观视图上表现为 Core 内部的逻辑自环
-			domainTraces = append(domainTraces, domain.TraceEvent{
-				Source:    "Core",
-				Target:    "Core",
-				Action:    act,
-				Data:      dat,
-				Timestamp: baseTime.Add(time.Duration(i) * time.Microsecond),
-			})
+			internalDetails = append(internalDetails, dat)
 		}
 		
 		lastMsg.Traces = append(lastMsg.Traces, domainTraces...)
 		
-		// 合并管线处理过程中生成的元数据 (如 Token 计数等)
+		// 合并 Meta
 		if lastMsg.Meta == nil {
 			lastMsg.Meta = make(map[string]interface{})
 		}

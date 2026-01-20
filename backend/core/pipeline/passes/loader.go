@@ -21,6 +21,10 @@ func (p *HistoryLoader) Name() string {
 	return "HistoryLoader"
 }
 
+func (p *HistoryLoader) Description() string {
+	return "加载历史会话"
+}
+
 func (p *HistoryLoader) Run(ctx context.Context, data *pipeline.ContextData) error {
 	// 从 History Service 获取 Session
 	session, err := p.historyService.Get(ctx, data.SessionID)

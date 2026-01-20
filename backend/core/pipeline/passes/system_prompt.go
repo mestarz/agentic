@@ -17,6 +17,10 @@ func (p *SystemPromptPass) Name() string {
 	return "SystemPromptPass"
 }
 
+func (p *SystemPromptPass) Description() string {
+	return "注入系统提示词"
+}
+
 func (p *SystemPromptPass) Run(ctx context.Context, data *pipeline.ContextData) error {
 	sysMsg := domain.Message{
 		Role:      domain.RoleSystem,

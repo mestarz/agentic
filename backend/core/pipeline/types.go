@@ -21,11 +21,25 @@ type ContextData struct {
 }
 
 // Pass 定义了上下文处理的单一职责单元
+
 type Pass interface {
-	// Name 返回 Pass 的唯一标识符，用于日志和追踪
+
+	// Name 返回 Pass 的唯一标识符，用于系统内部标识
+
 	Name() string
-	
+
+
+
+	// Description 返回 Pass 的功能名称或描述，用于 UI 展示
+
+	Description() string
+
+
+
 	// Run 执行具体的处理逻辑
+
 	// 如果返回 error，Pipeline 将终止执行
+
 	Run(ctx context.Context, data *ContextData) error
+
 }

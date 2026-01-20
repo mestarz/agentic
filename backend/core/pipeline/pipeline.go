@@ -2,6 +2,7 @@ package pipeline
 
 import (
 	"context"
+	"context-fabric/backend/core/domain"
 	"fmt"
 	"time"
 )
@@ -44,6 +45,7 @@ func (p *Pipeline) Execute(ctx context.Context, data *ContextData) error {
 	for _, pass := range p.passes {
 		start := time.Now()
 		passName := pass.Name()
+		passDesc := pass.Description()
 
 		// 执行 Pass
 		if err := pass.Run(ctx, data); err != nil {
@@ -58,8 +60,12 @@ func (p *Pipeline) Execute(ctx context.Context, data *ContextData) error {
 			"target": passName,
 			"action": "Complete",
 			"data": map[string]interface{}{
+				"description": passDesc,
+				"is_pass":     true,
+				"pass_name":   passName,
 				"duration_ms": duration,
 				"msg_count":   len(data.Messages),
+				"messages":    cloneMessages(data.Messages),
 			},
 		})
 	}
@@ -75,4 +81,16 @@ func (p *Pipeline) Execute(ctx context.Context, data *ContextData) error {
 	})
 
 	return nil
+}
+
+// cloneMessages 对消息列表进行深拷贝，用于 Trace 记录
+func cloneMessages(msgs []domain.Message) []interface{} {
+	cloned := make([]interface{}, len(msgs))
+	for i, m := range msgs {
+		cloned[i] = map[string]interface{}{
+			"role":    m.Role,
+			"content": m.Content,
+		}
+	}
+	return cloned
 }

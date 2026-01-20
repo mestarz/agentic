@@ -91,7 +91,8 @@ export function SequenceObserver({
     '流式内容返回': '流式内容返回'
   };
 
-  const translateAction = (action: string) => {
+  const translateAction = (action: string, data?: any) => {
+    if (data?.description) return data.description;
     if (actionMap[action]) return actionMap[action];
     const prefixRules = [
       { prefix: 'Dispatch:', label: '模型分发:' },
@@ -127,6 +128,10 @@ export function SequenceObserver({
     let streamingStart: any = null;
 
     sorted.forEach((t) => {
+      // 过滤掉冗余或固定的管线元数据 Trace，使视图更聚焦于核心逻辑
+      const redundantActions = ['Start', 'Finished', 'Loaded'];
+      if (redundantActions.includes(t.action)) return;
+
       const isStreamStart = t.action === 'Streaming Content';
       const isStreamEnd = t.action === 'Stream Complete' || t.action === 'Final Response';
 
@@ -169,7 +174,7 @@ export function SequenceObserver({
         if (src === 'Frontend') src = 'User';
         if (tgt === 'Frontend') tgt = 'User';
 
-        let label = translateAction(t.action);
+        let label = translateAction(t.action, t.data);
         if (t.data?.internal_component) {
             label += ` (${t.data.internal_component})`;
         }
@@ -279,7 +284,8 @@ export function SequenceObserver({
                               <div className={`flex items-center gap-1 px-3 py-1 rounded-full border shadow-lg bg-white z-40 ${selectedTraceId === idx ? 'border-indigo-500 ring-2 ring-indigo-100' : 'border-slate-200 group-hover:border-slate-400'}`}>
                                 <span className="text-[10px] font-black text-slate-400 mr-1 opacity-50">#{idx + 1}</span>
                                 <span className={`text-xs font-bold whitespace-nowrap ${t.source === 'Core' || t.target === 'Core' ? 'text-emerald-700' : 'text-slate-700'}`}>
-                                  {translateAction(t.action)}
+                                  {t.data?.is_pass && <span className="mr-1.5 px-1 py-0.5 bg-amber-100 text-amber-700 text-[8px] font-black rounded border border-amber-200 uppercase tracking-tighter">Pass</span>}
+                                  {translateAction(t.action, t.data)}
                                 </span>
                                 <span className="text-[10px] font-mono font-medium text-amber-500 ml-1">{durationStr}</span>
                               </div>
@@ -343,8 +349,17 @@ export function SequenceObserver({
                   <div className="space-y-8">
                     <div className="flex flex-col gap-4">
                         <div className="flex items-center gap-3">
-                           <div className="w-8 h-8 rounded-lg bg-emerald-600 text-white flex items-center justify-center font-black text-sm shadow-sm">#{selectedTraceId + 1}</div>
-                           <h3 className="text-lg font-bold text-slate-800 tracking-tight">{translateAction(currentTrace.action)}</h3>
+                           <div className={`w-8 h-8 rounded-lg flex items-center justify-center font-black text-sm shadow-sm ${currentTrace.data?.is_pass ? 'bg-amber-500 text-white' : 'bg-emerald-600 text-white'}`}>
+                             {currentTrace.data?.is_pass ? 'P' : `#${selectedTraceId + 1}`}
+                           </div>
+                           <div className="flex flex-col">
+                             <div className="flex items-center gap-2">
+                               <h3 className="text-lg font-bold text-slate-800 tracking-tight">{translateAction(currentTrace.action, currentTrace.data)}</h3>
+                               {currentTrace.data?.is_pass && (
+                                 <span className="px-1.5 py-0.5 bg-amber-100 text-amber-700 text-[9px] font-black rounded-full border border-amber-200 uppercase">Pipeline Pass</span>
+                               )}
+                             </div>
+                           </div>
                         </div>
                         <div className="flex items-center gap-4 bg-slate-50 p-3 rounded-xl border border-slate-100">
                            <div className="flex-1">
@@ -362,10 +377,12 @@ export function SequenceObserver({
                         {currentTrace.data?.internal_component && (
                             <div className="bg-amber-50/50 border border-amber-100 p-4 rounded-xl flex items-center justify-between">
                                <div>
-                                 <div className="text-[10px] font-black text-amber-400 uppercase mb-1">执行组件 (Component)</div>
-                                 <div className="text-sm font-bold text-amber-700 font-mono">{currentTrace.data.internal_component}</div>
+                                 <div className="text-[10px] font-black text-amber-400 uppercase mb-1">{currentTrace.data?.is_pass ? '管线逻辑 (Pass Logic)' : '执行组件 (Component)'}</div>
+                                 <div className="text-sm font-bold text-amber-700 font-mono">
+                                   {currentTrace.data?.is_pass ? currentTrace.data.pass_name : currentTrace.data.internal_component}
+                                 </div>
                                </div>
-                               <Cpu size={24} className="text-amber-300" />
+                               {currentTrace.data?.is_pass ? <Activity size={24} className="text-amber-400" /> : <Cpu size={24} className="text-amber-300" />}
                             </div>
                         )}
 
@@ -406,6 +423,38 @@ export function SequenceObserver({
                           </div>
                         )}
                     </div>
+
+                    {/* 新增：处理后的上下文展示 */}
+                    {currentTrace.data?.messages && Array.isArray(currentTrace.data.messages) && (
+                      <div className="space-y-3">
+                        <div className="text-[10px] font-black text-slate-400 uppercase tracking-wider flex items-center gap-2">
+                          <span>处理后的上下文 (Processed Context)</span>
+                          <span className="bg-slate-100 text-slate-500 px-1.5 py-0.5 rounded text-[9px] font-bold">{currentTrace.data.messages.length} 条消息</span>
+                        </div>
+                        <div className="flex flex-col gap-3">
+                          {currentTrace.data.messages.map((m: any, i: number) => (
+                            <div key={i} className="bg-slate-50 border border-slate-200/60 rounded-xl p-3 shadow-sm hover:shadow-md transition-shadow">
+                              <div className="flex items-center justify-between mb-2">
+                                <div className="flex items-center gap-2">
+                                  <span className={`text-[9px] font-black uppercase px-2 py-0.5 rounded-full shadow-sm ${
+                                    m.role === 'system' ? 'bg-amber-500 text-white' :
+                                    m.role === 'user' ? 'bg-indigo-500 text-white' :
+                                    'bg-emerald-500 text-white'
+                                  }`}>
+                                    {m.role}
+                                  </span>
+                                  <span className="text-[10px] font-bold text-slate-400 uppercase">Message #{i + 1}</span>
+                                </div>
+                                <span className="text-[10px] font-mono font-medium text-slate-400 bg-white px-1.5 py-0.5 rounded border border-slate-100">{(m.content || '').length} 字符</span>
+                              </div>
+                              <div className="text-xs text-slate-600 font-sans leading-relaxed whitespace-pre-wrap max-h-32 overflow-y-auto custom-scrollbar bg-white/50 p-2 rounded-lg border border-slate-100/50">
+                                {m.content}
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
 
                     <div className="space-y-3">
                       <div className="flex items-center justify-between">

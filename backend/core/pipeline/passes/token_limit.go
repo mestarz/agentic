@@ -25,6 +25,10 @@ func (p *TokenLimitPass) Name() string {
 	return "TokenLimitPass"
 }
 
+func (p *TokenLimitPass) Description() string {
+	return "Token 限制与截断"
+}
+
 func (p *TokenLimitPass) Run(ctx context.Context, data *pipeline.ContextData) error {
 	estimate := func(s string) int {
 		if p.tke == nil { return len(s) / 4 }

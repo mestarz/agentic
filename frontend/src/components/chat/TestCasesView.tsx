@@ -1,19 +1,16 @@
 import { useState, useEffect } from 'react';
 import {
   Beaker,
-  Play,
   Trash2,
-  Clock,
-  ListChecks,
-  ArrowLeft,
-  Edit3,
+  Play,
   Plus,
+  ArrowLeft,
   Save,
-  X,
-  GripVertical,
-  ChevronRight,
+  Clock,
+  Edit3,
+  ListChecks,
 } from 'lucide-react';
-import type { TestCase, TestCaseSummary } from '../../types';
+import type { TestCaseSummary, TestCase } from '../../types';
 
 interface TestCasesViewProps {
   onBack: () => void;
@@ -27,10 +24,6 @@ export function TestCasesView({ onBack, onRun }: TestCasesViewProps) {
   const [originalTestCase, setOriginalTestCase] = useState<TestCase | null>(null);
   const [isSaving, setIsSaving] = useState(false);
 
-  useEffect(() => {
-    fetchTestCases();
-  }, []);
-
   const fetchTestCases = async () => {
     setLoading(true);
     try {
@@ -43,6 +36,10 @@ export function TestCasesView({ onBack, onRun }: TestCasesViewProps) {
       setLoading(false);
     }
   };
+
+  useEffect(() => {
+    fetchTestCases();
+  }, []);
 
   const loadTestCaseForEdit = async (id: string) => {
     try {

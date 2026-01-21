@@ -1,15 +1,10 @@
 import { useState, useEffect } from 'react';
 import {
   Box,
-  Code2,
   Plus,
   Save,
   Trash2,
   Play,
-  Globe,
-  Settings2,
-  ChevronUp,
-  ChevronDown,
   Terminal,
   Keyboard,
   MessageSquare,
@@ -41,15 +36,14 @@ export function ModelsView({ onBack, appConfigs, setAppConfigs }: ModelsViewProp
   const [activeTab, setActiveTab] = useState<'main' | 'advanced'>('main');
   const [isVimMode, setIsVimMode] = useState(false);
 
-  useEffect(() => {
-    fetchModels();
-  }, []);
-
   const fetchModels = async () => {
     try {
       const resp = await fetch('/api/models/models');
       const data = await resp.json();
-      const loaded = (data.data || []).map((m: any) => ({ ...m, purpose: m.purpose || 'chat' }));
+      const loaded = (data.data || []).map((m: ModelAdapterConfig) => ({
+        ...m,
+        purpose: m.purpose || 'chat',
+      }));
       setModels(loaded);
       if (loaded.length > 0 && !selectedModel) {
         setSelectedModel(loaded[0]);
@@ -59,6 +53,11 @@ export function ModelsView({ onBack, appConfigs, setAppConfigs }: ModelsViewProp
       console.error('Failed to fetch models', e);
     }
   };
+
+  useEffect(() => {
+    fetchModels();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const handleSave = async () => {
     if (!selectedModel) return;
@@ -76,7 +75,7 @@ export function ModelsView({ onBack, appConfigs, setAppConfigs }: ModelsViewProp
         next.delete(selectedModel.id);
         return next;
       });
-    } catch (e) {
+    } catch {
       alert('保存失败');
     } finally {
       setLoading(false);
@@ -114,8 +113,8 @@ export function ModelsView({ onBack, appConfigs, setAppConfigs }: ModelsViewProp
 
       setSelectedModel(null);
       setOriginalModel(null);
-    } catch (e) {
-      alert('删除失败: ' + e);
+    } catch (err) {
+      alert('删除失败: ' + err);
     } finally {
       setLoading(false);
     }
@@ -141,17 +140,56 @@ export function ModelsView({ onBack, appConfigs, setAppConfigs }: ModelsViewProp
     setUnsavedIds((prev) => new Set(prev).add(newId));
   };
 
+  const getChatTemplate = () => {
+    return [
+      'import json',
+      'import httpx',
+      '',
+      'async def generate_stream(messages, config):',
+      '    url = "https://api.deepseek.com/chat/completions"',
+      '    api_key = "YOUR_API_KEY"',
+      '    headers = {"Authorization": f"Bearer {api_key}"}',
+      '    payload = {"model": "deepseek-chat", "messages": [{"role": m.role, "content": m.content} for m in messages], "stream": True}',
+      '    yield f"--> [调试] 正在请求: {url}\n"',
+      '    async with httpx.AsyncClient(timeout=60.0) as client:',
+      '        async with client.stream("POST", url, json=payload, headers=headers) as resp:',
+      '            if resp.status_code != 200:',
+      '                yield f"--> [错误] 接口报错: {resp.status_code}\n"',
+      '                return',
+      '            async for line in resp.aiter_lines():',
+      '                if line.startswith("data: "):',
+      '                    data_str = line[6:].strip()',
+      '                    if data_str == "[DONE]": break',
+      '                    try:',
+      '                        content = json.loads(data_str)["choices"][0]["delta"].get("content", "")',
+      '                        if content: yield content',
+      '                    except Exception: continue',
+    ].join('\n');
+  };
+
+  const getEmbeddingTemplate = () => {
+    return [
+      'import json',
+      'import httpx',
+      '',
+      'async def get_embeddings(input_text, config):',
+      '    # 向量模型适配器模板',
+      '    return {"data": [{"embedding": [0.1] * 1536}]}',
+    ].join('\n');
+  };
+
   const runDiagnostics = async () => {
     if (!selectedModel) return;
     setIsTerminalExpanded(true);
     setTestLogs([]);
 
-    if (isModified) {
+    const currentIsModified = JSON.stringify(selectedModel) !== JSON.stringify(originalModel);
+    if (currentIsModified) {
       setTestLogs((prev) => [...prev, '> 检测到未保存的更改，正在自动保存...']);
       try {
         await handleSave();
         setTestLogs((prev) => [...prev, '> 自动保存成功。']);
-      } catch (e) {
+      } catch {
         setTestLogs((prev) => [...prev, '> 自动保存失败，中止测试。']);
         return;
       }
@@ -161,7 +199,6 @@ export function ModelsView({ onBack, appConfigs, setAppConfigs }: ModelsViewProp
     const start = Date.now();
 
     if (selectedModel.purpose === 'embedding') {
-      // 向量模型诊断
       setTestLogs((prev) => [
         ...prev,
         `> 启动向量化诊断: ${selectedModel.id}...`,
@@ -184,15 +221,14 @@ export function ModelsView({ onBack, appConfigs, setAppConfigs }: ModelsViewProp
           `> 向量维度: ${vector.length}`,
           `> 预览 (前5位): [${vector.slice(0, 5).join(', ')} ...]`,
         ]);
-      } catch (e: any) {
-        setTestLogs((prev) => [...prev, `> 向量化失败: ${e.message}`]);
+      } catch (err: any) {
+        setTestLogs((prev) => [...prev, `> 向量化失败: ${err.message}`]);
       } finally {
         setIsTesting(false);
       }
       return;
     }
 
-    // 对话模型诊断 (SSE)
     const targetInfo = selectedModel.config.base_url || '自定义逻辑地址';
     setTestLogs((prev) => [
       ...prev,
@@ -243,45 +279,22 @@ export function ModelsView({ onBack, appConfigs, setAppConfigs }: ModelsViewProp
                     `> [Trace] ${data.trace.source} -> ${data.trace.target}: ${data.trace.action}`,
                   ]);
                 }
-              } catch {}
+              } catch {
+                // Ignore parse errors
+              }
             }
           }
         }
       }
       setTestLogs((prev) => [...prev, `> 诊断结束。总耗时: ${Date.now() - start}ms`]);
-    } catch (e: any) {
-      setTestLogs((prev) => [...prev, `> 错误: ${e.message}`]);
+    } catch (err: any) {
+      setTestLogs((prev) => [...prev, `> 错误: ${err.message}`]);
     } finally {
       setIsTesting(false);
     }
   };
 
   const isModified = JSON.stringify(selectedModel) !== JSON.stringify(originalModel);
-
-  const getChatTemplate = () => {
-    return `import json\nimport httpx\n\nasync def generate_stream(messages, config):\n    url = \"https://api.deepseek.com/chat/completions\"
-    api_key = \"YOUR_API_KEY\"
-    headers = {\"Authorization\": f\"Bearer {api_key}\"}
-    payload = {\"model\": \"deepseek-chat\", \"messages\": [{\"role\": m.role, \"content\": m.content} for m in messages], \"stream\": True}
-    yield f\"--> [调试] 正在请求: {url}\n\" 
-    async with httpx.AsyncClient(timeout=60.0) as client:
-        async with client.stream(\"POST\", url, json=payload, headers=headers) as resp:
-            if resp.status_code != 200:
-                yield f\"--> [错误] 接口报错: {resp.status_code}\n\"
-                return
-            async for line in resp.aiter_lines():
-                if line.startsWith(\"data: \"):
-                    data_str = line[6:].strip()
-                    if data_str == \"[DONE]\": break
-                    try:
-                        content = json.loads(data_str)[\"choices\"][0][\"delta\"].get(\"content\", \"\")
-                        if content: yield content
-                    except: continue`;
-  };
-
-  const getEmbeddingTemplate = () => {
-    return `import json\nimport httpx\n\nasync def get_embeddings(input_text, config):\n    # TODO: 后端 Gateway 暂未完全支持自定义 Embedding 脚本执行，此处仅作模板参考\n    # 未来版本中，Embedding 适配器将支持像 Chat 一样编写 Python 逻辑\n    return {\"data\": [{\"embedding\": [0.1] * 1536}]}`;
-  };
 
   const chatModels = models.filter((m) => m.purpose === 'chat' || !m.purpose);
   const embeddingModels = models.filter((m) => m.purpose === 'embedding');
@@ -496,6 +509,20 @@ export function ModelsView({ onBack, appConfigs, setAppConfigs }: ModelsViewProp
                             <span>VIM MODE: {isVimMode ? 'ON' : 'OFF'}</span>
                           </button>
                         </div>
+                        <button
+                          onClick={() =>
+                            setSelectedModel({
+                              ...selectedModel,
+                              script_content:
+                                selectedModel.purpose === 'embedding'
+                                  ? getEmbeddingTemplate()
+                                  : getChatTemplate(),
+                            })
+                          }
+                          className="text-[9px] font-bold uppercase transition-colors hover:text-amber-400"
+                        >
+                          填充标准模板
+                        </button>
                       </div>
                       <div className="flex-1 overflow-hidden">
                         <CodeMirror
@@ -550,7 +577,7 @@ export function ModelsView({ onBack, appConfigs, setAppConfigs }: ModelsViewProp
                           </div>
                           <div>
                             <label className="mb-2 ml-1 block text-[11px] font-black text-slate-400 uppercase">
-                              模型标识 (Model ID)
+                              后端模型名 (ID)
                             </label>
                             <input
                               className="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 font-mono text-sm shadow-sm focus:ring-2 focus:ring-indigo-500/10"
@@ -571,12 +598,12 @@ export function ModelsView({ onBack, appConfigs, setAppConfigs }: ModelsViewProp
                         </div>
                         <div>
                           <label className="mb-2 ml-1 block text-[11px] font-black text-slate-400 uppercase">
-                            API 端点 (Base URL)
+                            基础 URL (API Endpoint)
                           </label>
                           <input
-                            className="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 font-mono text-sm shadow-sm focus:ring-2 focus:ring-indigo-500/10"
+                            className="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 font-mono text-sm shadow-sm outline-none focus:ring-2 focus:ring-indigo-500/10"
                             value={selectedModel.config.base_url || ''}
-                            placeholder="https://api.openai.com/v1"
+                            placeholder="https://..."
                             onChange={(e) =>
                               setSelectedModel({
                                 ...selectedModel,
@@ -587,11 +614,11 @@ export function ModelsView({ onBack, appConfigs, setAppConfigs }: ModelsViewProp
                         </div>
                         <div>
                           <label className="mb-2 ml-1 block text-[11px] font-black text-slate-400 uppercase">
-                            认证密钥 (API Key)
+                            API 密钥 (API Key)
                           </label>
                           <input
                             type="password"
-                            className="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 font-mono text-sm shadow-sm focus:ring-2 focus:ring-indigo-500/10"
+                            className="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 font-mono text-sm shadow-sm outline-none focus:ring-2 focus:ring-indigo-500/10"
                             value={selectedModel.config.api_key || ''}
                             placeholder="sk-..."
                             onChange={(e) =>
@@ -618,13 +645,14 @@ export function ModelsView({ onBack, appConfigs, setAppConfigs }: ModelsViewProp
                             <h4
                               className={`text-[10px] font-black tracking-widest uppercase ${selectedModel.purpose === 'embedding' ? 'text-emerald-600' : 'text-indigo-600'}`}
                             >
-                              配置建议
+                              配置指引
                             </h4>
                           </div>
                           <p className="text-[11px] leading-relaxed font-medium text-slate-500">
+                            标准模式下，系统将自动使用 OpenAI 兼容协议发起请求。
                             {selectedModel.purpose === 'embedding'
-                              ? '当前模型作为“向量适配器”，将用于将用户 Query 和知识库文档转化为数值向量。建议使用 text-embedding 系列模型以获得最佳兼容性。'
-                              : '当前模型作为“对话执行器”，负责最终的回答生成。建议启用流式传输 (Stream) 以获得更好的交互体验。'}
+                              ? '对于向量模型，系统将请求 `/embeddings` 端点。'
+                              : '对于对话模型，系统将请求 `/chat/completions` 端点。'}
                           </p>
                         </div>
                       </div>
@@ -637,10 +665,10 @@ export function ModelsView({ onBack, appConfigs, setAppConfigs }: ModelsViewProp
                         <div className="mb-8 flex items-center justify-between">
                           <div>
                             <h3 className="text-sm font-black tracking-tight text-slate-800 uppercase">
-                              扩展参数
+                              扩展参数表格
                             </h3>
                             <p className="mt-1 text-[10px] font-medium text-slate-400">
-                              透传给适配器的自定义 JSON 配置
+                              传递给适配器的自定义配置项
                             </p>
                           </div>
                           <button
@@ -653,7 +681,7 @@ export function ModelsView({ onBack, appConfigs, setAppConfigs }: ModelsViewProp
                             }}
                             className="flex items-center gap-2 rounded-xl bg-indigo-50 px-4 py-2 text-[10px] font-black text-indigo-600 uppercase transition-all hover:bg-indigo-100"
                           >
-                            <Plus size={14} /> 添加
+                            <Plus size={14} /> 添加项
                           </button>
                         </div>
                         <div className="space-y-3">

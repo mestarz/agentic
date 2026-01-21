@@ -1,6 +1,6 @@
 #!/bin/bash
 
-ROOT_DIR=$(cd "$(dirname "$0")"; pwd)
+ROOT_DIR=$(cd "$(dirname "$0")/.."; pwd)
 LOG_DIR="$ROOT_DIR/logs"
 
 echo "正在停止所有 ContextFabric 服务..."

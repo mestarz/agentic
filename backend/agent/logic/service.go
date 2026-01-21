@@ -41,13 +41,13 @@ func (c *CoreServiceClient) GetOptimizedContext(ctx context.Context, sessionID, 
 	if err != nil {
 		return nil, err
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	var result struct {
 		Messages []domain.Message `json:"messages"`
 	}
 	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
-		return nil, err
+		return nil, fmt.Errorf("failed to decode context response: %w", err)
 	}
 	return result.Messages, nil
 }
@@ -62,10 +62,10 @@ func (c *CoreServiceClient) AppendAssistantMessage(ctx context.Context, sessionI
 	if err != nil {
 		return nil
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	var responseMeta map[string]interface{}
-	json.NewDecoder(resp.Body).Decode(&responseMeta)
+	_ = json.NewDecoder(resp.Body).Decode(&responseMeta)
 	return responseMeta
 }
 
@@ -100,7 +100,7 @@ func (l *LLMGatewayClient) ChatStream(ctx context.Context, modelID string, msgs 
 	if err != nil {
 		return err
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	if resp.StatusCode != http.StatusOK {
 		return fmt.Errorf("llm gateway returned status: %d", resp.StatusCode)
@@ -164,7 +164,7 @@ func (l *LLMGatewayClient) GetEmbeddings(ctx context.Context, modelID string, in
 	if err != nil {
 		return nil, err
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	if resp.StatusCode != http.StatusOK {
 		body, _ := io.ReadAll(resp.Body)
@@ -172,7 +172,9 @@ func (l *LLMGatewayClient) GetEmbeddings(ctx context.Context, modelID string, in
 	}
 
 	var result map[string]interface{}
-	json.NewDecoder(resp.Body).Decode(&result)
+	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+		return nil, fmt.Errorf("failed to decode embedding response: %w", err)
+	}
 	return result, nil
 }
 

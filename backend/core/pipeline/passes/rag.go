@@ -138,7 +138,7 @@ func (p *RAGPass) fetchEmbedding(ctx context.Context, text, modelID string) ([]f
 	if err != nil {
 		return nil, err
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	if resp.StatusCode != http.StatusOK {
 		return nil, fmt.Errorf("embedding gateway returned status %d", resp.StatusCode)
@@ -176,7 +176,7 @@ func (p *RAGPass) searchQdrant(ctx context.Context, vector []float32) ([]string,
 	if err != nil {
 		return nil, err
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	if resp.StatusCode != http.StatusOK {
 		return nil, fmt.Errorf("qdrant search failed with status %d", resp.StatusCode)

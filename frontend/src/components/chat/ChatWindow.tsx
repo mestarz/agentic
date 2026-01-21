@@ -13,7 +13,7 @@ import {
   Check,
   Save,
 } from 'lucide-react';
-import type { Session, AppConfigs, TraceEvent } from '../../types';
+import type { Session, AppConfigs } from '../../types';
 import { Markdown } from '../ui/Markdown';
 
 interface ChatWindowProps {

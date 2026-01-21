@@ -60,144 +60,146 @@ export function useChat({
       traces: [],
     };
 
-    return new Promise<void>(async (resolve, reject) => {
-      setCurrentSession((prev) => {
-        // 如果 sessionId 变化了（比如新建），清空旧消息
-        const baseMessages = prev && prev.id === sessionId ? prev.messages : [];
-        const aiMsg: Message = {
-          role: 'assistant',
-          content: '',
-          timestamp: new Date().toISOString(),
-          traces: [],
-        };
-        return {
-          id: sessionId,
-          app_id: prev?.app_id || 'web',
-          messages: [...baseMessages, userMsg, aiMsg],
-        };
-      });
-
-      setInput('');
-      setLoading(true);
-
-      try {
-        addLog(`>>> [System] 正在连接后端代理: /api/debug/chat (Session: ${sessionId})`);
-        const response = await fetch('/api/debug/chat', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          signal: abortController.signal,
-          body: JSON.stringify({
-            session_id: sessionId,
-            query: userMsg.content,
-            agent_model_id: appConfigs.agentModelID,
-            core_model_id: appConfigs.coreModelID,
-            rag_enabled: appConfigs.ragEnabled,
-            rag_embedding_model_id: appConfigs.ragEmbeddingModelID,
-          }),
+    return new Promise<void>((resolve, reject) => {
+      (async () => {
+        setCurrentSession((prev) => {
+          // 如果 sessionId 变化了（比如新建），清空旧消息
+          const baseMessages = prev && prev.id === sessionId ? prev.messages : [];
+          const aiMsg: Message = {
+            role: 'assistant',
+            content: '',
+            timestamp: new Date().toISOString(),
+            traces: [],
+          };
+          return {
+            id: sessionId,
+            app_id: prev?.app_id || 'web',
+            messages: [...baseMessages, userMsg, aiMsg],
+          };
         });
 
-        if (!response.body) throw new Error('后端未返回 Response Body');
-        addLog('>>> [System] HTTP 连接已建立，等待流式数据...');
+        setInput('');
+        setLoading(true);
 
-        const reader = response.body.getReader();
-        const decoder = new TextDecoder();
-        let fullContent = '';
-        let residual = '';
+        try {
+          addLog(`>>> [System] 正在连接后端代理: /api/debug/chat (Session: ${sessionId})`);
+          const response = await fetch('/api/debug/chat', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            signal: abortController.signal,
+            body: JSON.stringify({
+              session_id: sessionId,
+              query: userMsg.content,
+              agent_model_id: appConfigs.agentModelID,
+              core_model_id: appConfigs.coreModelID,
+              rag_enabled: appConfigs.ragEnabled,
+              rag_embedding_model_id: appConfigs.ragEmbeddingModelID,
+            }),
+          });
 
-        while (true) {
-          const { value, done } = await reader.read();
-          if (done) break;
+          if (!response.body) throw new Error('后端未返回 Response Body');
+          addLog('>>> [System] HTTP 连接已建立，等待流式数据...');
 
-          const text = residual + decoder.decode(value, { stream: true });
-          const lines = text.split('\n');
-          residual = lines.pop() || '';
+          const reader = response.body.getReader();
+          const decoder = new TextDecoder();
+          let fullContent = '';
+          let residual = '';
 
-          for (const line of lines) {
-            if (line.trim() === '') continue;
+          while (true) {
+            const { value, done } = await reader.read();
+            if (done) break;
 
-            if (line.startsWith('data: ')) {
-              const rawData = line.replace('data: ', '').trim();
-              if (rawData === '[DONE]') {
-                addLog('>>> [System] 收到结束标记 [DONE]');
-                break;
-              }
+            const text = residual + decoder.decode(value, { stream: true });
+            const lines = text.split('\n');
+            residual = lines.pop() || '';
 
-              try {
-                const data = JSON.parse(rawData);
-                if (data.type === 'trace') {
-                  const newTrace = { ...data.trace, timestamp: new Date().toISOString() };
-                  setLiveTraces((prev) => [...prev, newTrace]);
-                  addLog(
-                    `[Trace] ${data.trace.source} -> ${data.trace.target}: ${data.trace.action}`,
-                  );
+            for (const line of lines) {
+              if (line.trim() === '') continue;
 
-                  setCurrentSession((prev) => {
-                    if (!prev || prev.id !== sessionId) return prev;
-                    const newMsgs = [...prev.messages];
-                    // 动态查找最后一条 assistant 消息
-                    const idx = newMsgs.length - 1;
-                    if (newMsgs[idx]) {
-                      newMsgs[idx] = {
-                        ...newMsgs[idx],
-                        traces: [...(newMsgs[idx].traces || []), newTrace],
-                      };
-                    }
-                    return { ...prev, messages: newMsgs };
-                  });
-                } else if (data.type === 'meta') {
-                  addLog(`>>> [System] 收到元数据更新: ${JSON.stringify(data.meta)}`);
-                  setCurrentSession((prev) => {
-                    if (!prev || prev.id !== sessionId) return prev;
-                    const newMsgs = [...prev.messages];
-                    const idx = newMsgs.length - 1;
-                    if (newMsgs[idx]) newMsgs[idx] = { ...newMsgs[idx], meta: data.meta };
-                    if (newMsgs[idx - 1])
-                      newMsgs[idx - 1] = { ...newMsgs[idx - 1], meta: data.meta };
-                    return { ...prev, messages: newMsgs };
-                  });
-                } else if (data.type === 'chunk') {
-                  fullContent += data.content || '';
-                  setCurrentSession((prev) => {
-                    if (!prev || prev.id !== sessionId) return prev;
-                    const newMsgs = [...prev.messages];
-                    const idx = newMsgs.length - 1;
-                    if (newMsgs[idx]) newMsgs[idx] = { ...newMsgs[idx], content: fullContent };
-                    return { ...prev, messages: newMsgs };
-                  });
+              if (line.startsWith('data: ')) {
+                const rawData = line.replace('data: ', '').trim();
+                if (rawData === '[DONE]') {
+                  addLog('>>> [System] 收到结束标记 [DONE]');
+                  break;
                 }
-              } catch (e) {
-                addLog(`>>> [Warning] 无法解析 JSON 数据行: ${rawData.substring(0, 100)}...`);
+
+                try {
+                  const data = JSON.parse(rawData);
+                  if (data.type === 'trace') {
+                    const newTrace = { ...data.trace, timestamp: new Date().toISOString() };
+                    setLiveTraces((prev) => [...prev, newTrace]);
+                    addLog(
+                      `[Trace] ${data.trace.source} -> ${data.trace.target}: ${data.trace.action}`,
+                    );
+
+                    setCurrentSession((prev) => {
+                      if (!prev || prev.id !== sessionId) return prev;
+                      const newMsgs = [...prev.messages];
+                      // 动态查找最后一条 assistant 消息
+                      const idx = newMsgs.length - 1;
+                      if (newMsgs[idx]) {
+                        newMsgs[idx] = {
+                          ...newMsgs[idx],
+                          traces: [...(newMsgs[idx].traces || []), newTrace],
+                        };
+                      }
+                      return { ...prev, messages: newMsgs };
+                    });
+                  } else if (data.type === 'meta') {
+                    addLog(`>>> [System] 收到元数据更新: ${JSON.stringify(data.meta)}`);
+                    setCurrentSession((prev) => {
+                      if (!prev || prev.id !== sessionId) return prev;
+                      const newMsgs = [...prev.messages];
+                      const idx = newMsgs.length - 1;
+                      if (newMsgs[idx]) newMsgs[idx] = { ...newMsgs[idx], meta: data.meta };
+                      if (newMsgs[idx - 1])
+                        newMsgs[idx - 1] = { ...newMsgs[idx - 1], meta: data.meta };
+                      return { ...prev, messages: newMsgs };
+                    });
+                  } else if (data.type === 'chunk') {
+                    fullContent += data.content || '';
+                    setCurrentSession((prev) => {
+                      if (!prev || prev.id !== sessionId) return prev;
+                      const newMsgs = [...prev.messages];
+                      const idx = newMsgs.length - 1;
+                      if (newMsgs[idx]) newMsgs[idx] = { ...newMsgs[idx], content: fullContent };
+                      return { ...prev, messages: newMsgs };
+                    });
+                  }
+                } catch (e) {
+                  addLog(`>>> [Warning] 无法解析 JSON 数据行: ${rawData.substring(0, 100)}...`);
+                }
+              } else {
+                addLog(`>>> [Raw] ${line}`);
               }
-            } else {
-              addLog(`>>> [Raw] ${line}`);
             }
           }
-        }
 
-        if (forcedSessionId) {
-          // 如果是强制 ID (测试模式)，确保选中该 ID
-          setSelectedId(forcedSessionId);
-        } else if (!currentSession?.id) {
-          setSelectedId(sessionId);
-        }
+          if (forcedSessionId) {
+            // 如果是强制 ID (测试模式)，确保选中该 ID
+            setSelectedId(forcedSessionId);
+          } else if (!currentSession?.id) {
+            setSelectedId(sessionId);
+          }
 
-        await fetchSessions();
-        addLog('>>> [System] 对话流程正常结束。');
-        resolve();
-      } catch (err: any) {
-        if (err.name === 'AbortError') {
-          addLog('>>> [System] 请求已中止。');
+          await fetchSessions();
+          addLog('>>> [System] 对话流程正常结束。');
           resolve();
-        } else {
-          const errorMsg = `连接发生错误: ${err.message}`;
-          addLog(`>>> [Error] ${errorMsg}`);
-          alert(errorMsg);
-          reject(err);
+        } catch (err: any) {
+          if (err.name === 'AbortError') {
+            addLog('>>> [System] 请求已中止。');
+            resolve();
+          } else {
+            const errorMsg = `连接发生错误: ${err.message}`;
+            addLog(`>>> [Error] ${errorMsg}`);
+            alert(errorMsg);
+            reject(err);
+          }
+        } finally {
+          setLoading(false);
+          abortControllerRef.current = null;
         }
-      } finally {
-        setLoading(false);
-        abortControllerRef.current = null;
-      }
+      })();
     });
   };
 

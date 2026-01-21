@@ -1,6 +1,6 @@
 #!/bin/bash
 
-ROOT_DIR=$(cd "$(dirname "$0")"; pwd)
+ROOT_DIR=$(cd "$(dirname "$0")/.."; pwd)
 LOG_DIR="$ROOT_DIR/logs"
 BIN_DIR="$ROOT_DIR/bin"
 mkdir -p "$LOG_DIR" "$BIN_DIR"
@@ -38,9 +38,9 @@ cd "$ROOT_DIR/llm-service"
 # 尝试创建并激活虚拟环境 (可选)
 if [ ! -d "venv" ]; then
     python3 -m venv venv
-    ./venv/bin/pip install -r requirements.txt
+    "$ROOT_DIR/llm-service/venv/bin/pip" install -r requirements.txt
 fi
-nohup ./venv/bin/python3 -m uvicorn app.main:app --host 0.0.0.0 --port 8000 > "$LOG_DIR/llm-gateway.log" 2>&1 &
+nohup "$ROOT_DIR/llm-service/venv/bin/python3" -m uvicorn app.main:app --host 0.0.0.0 --port 8000 > "$LOG_DIR/llm-gateway.log" 2>&1 &
 echo $! > "$LOG_DIR/llm-gateway.pid"
 
 # 1. 编译并启动 Core

@@ -27,14 +27,25 @@
 
 ## 快速启动
 
-确保您的系统已安装 Go 1.21+、Python 3.10+ 和 Node.js。
+确保您的系统已安装 Go 1.22+、Python 3.10+、Node.js 18+ 以及 Docker。
 
 ```bash
-# 一键启动所有服务（包括 Python 环境初始化、Go 编译、前端启动）
-./start.sh
+# 1. 初始化环境 (安装依赖、创建目录)
+./scripts/init.sh
+
+# 2. 一键启动所有服务
+./scripts/start.sh
 ```
 
 访问地址: [http://localhost:5173](http://localhost:5173)
+
+## 开发工具
+
+本项目集成了严谨的自动化工具链，建议在提交代码前运行以下指令：
+
+*   **代码格式化**: 运行 `./scripts/format.sh` 一键统一 Go (`gofmt`), Python (`ruff`) 和 Web (`prettier`) 的代码风格。
+*   **静态检查**: 运行 `./scripts/lint.sh` 一键扫描全栈代码中的潜在错误与类型问题。
+*   **停止服务**: 运行 `./scripts/stop.sh` 安全关闭所有子服务及 Qdrant 容器。
 
 ## 目录结构
 

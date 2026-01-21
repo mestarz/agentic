@@ -7,7 +7,7 @@
 
 set -e # 遇到错误立即停止执行
 
-ROOT_DIR=$(cd "$(dirname "$0")"; pwd)
+ROOT_DIR=$(cd "$(dirname "$0")/.."; pwd)
 LOG_DIR="$ROOT_DIR/logs"
 BIN_DIR="$ROOT_DIR/bin"
 DATA_DIR="$ROOT_DIR/data"
@@ -58,8 +58,8 @@ if [ ! -d "venv" ]; then
     echo "✅ 虚拟环境 venv 已创建。"
 fi
 # 升级 pip 并安装依赖
-./venv/bin/pip install --upgrade pip -q
-./venv/bin/pip install -r requirements.txt -q
+"$ROOT_DIR/llm-service/venv/bin/pip" install --upgrade pip -q
+"$ROOT_DIR/llm-service/venv/bin/pip" install -r requirements.txt -q
 echo "✅ Python 依赖安装完成。"
 
 # 5. 初始化前端依赖 (Node.js)
@@ -81,7 +81,7 @@ echo "-------------------------------------------------------"
 echo "🎉 初始化成功！"
 echo "-------------------------------------------------------"
 echo "提示: "
-echo "1. 使用 ./start.sh 启动所有服务。"
+echo "1. 使用 ./scripts/start.sh 启动所有服务。"
 echo "2. 访问 http://localhost:5173 进入 Web 控制台。"
 echo "3. 如果需要使用 RAG, 请确保 Docker 已启动。"
 echo "-------------------------------------------------------"

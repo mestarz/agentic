@@ -31,7 +31,6 @@ export function useConfig() {
 
   // 状态轮询逻辑
   useEffect(() => {
-    let timer: any;
     const controller = new AbortController();
 
     const checkStatus = async () => {
@@ -51,7 +50,7 @@ export function useConfig() {
     };
 
     checkStatus();
-    timer = setInterval(checkStatus, 10000);
+    const timer = setInterval(checkStatus, 10000);
 
     return () => {
       controller.abort();

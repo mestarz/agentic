@@ -166,7 +166,7 @@ export function useChat({
                       return { ...prev, messages: newMsgs };
                     });
                   }
-                } catch (e) {
+                } catch {
                   addLog(`>>> [Warning] 无法解析 JSON 数据行: ${rawData.substring(0, 100)}...`);
                 }
               } else {
@@ -185,12 +185,12 @@ export function useChat({
           await fetchSessions();
           addLog('>>> [System] 对话流程正常结束。');
           resolve();
-        } catch (err: any) {
-          if (err.name === 'AbortError') {
+        } catch (err: unknown) {
+          if (err instanceof Error && err.name === 'AbortError') {
             addLog('>>> [System] 请求已中止。');
             resolve();
           } else {
-            const errorMsg = `连接发生错误: ${err.message}`;
+            const errorMsg = `连接发生错误: ${err instanceof Error ? err.message : String(err)}`;
             addLog(`>>> [Error] ${errorMsg}`);
             alert(errorMsg);
             reject(err);
@@ -219,8 +219,8 @@ export function useChat({
       try {
         // 关键点：传入 forcedSessionId 确保重放期间始终使用这个测试 session
         await handleSend(prompts[i], newSessionId);
-      } catch (e) {
-        addLog(`>>> [Replay] 执行中断: ${e}`);
+      } catch (err) {
+        addLog(`>>> [Replay] 执行中断: ${err}`);
         break;
       }
     }

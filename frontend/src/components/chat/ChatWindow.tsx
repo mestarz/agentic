@@ -140,15 +140,23 @@ export function ChatWindow({
           )}
           {currentSession?.messages &&
             (() => {
-              const stats = [...currentSession.messages]
+              const lastWithMeta = [...currentSession.messages]
                 .reverse()
-                .find((m) => m.meta?.tokens_total)?.meta;
-              if (!stats) return null;
-              const p = (stats.tokens_total / stats.tokens_max) * 100;
+                .find((m) => m.meta?.tokens_total);
+              const stats = lastWithMeta?.meta;
+              if (
+                !stats ||
+                typeof stats.tokens_total !== 'number' ||
+                typeof stats.tokens_max !== 'number'
+              )
+                return null;
+              const tokens_total = stats.tokens_total;
+              const tokens_max = stats.tokens_max;
+              const p = (tokens_total / tokens_max) * 100;
               return (
                 <div className="flex flex-col items-end gap-1">
                   <span className="font-mono text-[9px] text-slate-400 uppercase">
-                    {stats.tokens_total} / {stats.tokens_max} Tokens
+                    {tokens_total} / {tokens_max} Tokens
                   </span>
                   <div className="h-1 w-20 overflow-hidden rounded-full bg-slate-100">
                     <div

@@ -3,7 +3,7 @@ import type { AppConfigs, ModelAdapterConfig } from '../../types';
 
 interface ConfigBlockProps {
   title: string;
-  icon: any;
+  icon: React.ComponentType<{ size?: number | string }>;
   type: 'agentModelID' | 'coreModelID';
   selectedID: string;
   models: ModelAdapterConfig[];

@@ -18,6 +18,7 @@ export function useSessions() {
   }, []);
 
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     fetchSessions();
   }, [fetchSessions]);
 

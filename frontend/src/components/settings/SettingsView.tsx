@@ -22,7 +22,10 @@ export function SettingsView({
     fetch('/api/models/models')
       .then((res) => res.json())
       .then((data) => {
-        const loaded = (data.data || []).map((m: any) => ({ ...m, purpose: m.purpose || 'chat' }));
+        const loaded = (data.data || []).map((m: ModelAdapterConfig) => ({
+          ...m,
+          purpose: m.purpose || 'chat',
+        }));
         setModels(loaded);
       })
       .catch((err) => console.error('Failed to load models', err));

@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { Maximize2 } from 'lucide-react';
+import type { ModelAdapterConfig } from './types';
 import { useConfig } from './hooks/useConfig';
 import { useSessions } from './hooks/useSessions';
 import { useChat } from './hooks/useChat';
@@ -31,14 +32,14 @@ function App() {
             let changed = false;
             if (
               prev.agentModelID === 'mock-model' ||
-              !models.find((m) => m.id === prev.agentModelID)
+              !models.find((m: ModelAdapterConfig) => m.id === prev.agentModelID)
             ) {
               next.agentModelID = models[0].id;
               changed = true;
             }
             if (
               prev.coreModelID === 'mock-model' ||
-              !models.find((m) => m.id === prev.coreModelID)
+              !models.find((m: ModelAdapterConfig) => m.id === prev.coreModelID)
             ) {
               next.coreModelID = models[0].id;
               changed = true;
@@ -48,7 +49,7 @@ function App() {
         }
       })
       .catch((e) => console.error('Auto-sync failed', e));
-  }, []);
+  }, [setAppConfigs]);
 
   const {
     sessions,

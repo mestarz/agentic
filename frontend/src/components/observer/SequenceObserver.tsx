@@ -9,7 +9,7 @@ import {
   Activity,
   Plus,
 } from 'lucide-react';
-import type { Session } from '../../types';
+import type { Session, TraceEvent } from '../../types';
 import { useMemo } from 'react';
 
 interface SequenceObserverProps {
@@ -19,6 +19,24 @@ interface SequenceObserverProps {
   setSelectedTraceId: (id: number | null) => void;
   isExpanded: boolean;
   setIsExpanded: (expanded: boolean) => void;
+}
+
+interface ProcessedTrace extends TraceEvent {
+  originalIdx?: number;
+  durationMs?: number;
+  endTimestamp?: string;
+}
+
+interface TraceData {
+  is_pass?: boolean;
+  description?: string;
+  internal_component?: string;
+  pass_name?: string;
+  endpoint?: string;
+  model?: string;
+  messages?: Array<Record<string, unknown>>;
+  internal_logs?: Array<Record<string, unknown>>;
+  [key: string]: unknown;
 }
 
 export function SequenceObserver({
@@ -98,8 +116,8 @@ export function SequenceObserver({
     流式内容返回: '流式内容返回',
   };
 
-  const translateAction = (action: string, data?: any) => {
-    if (data?.description) return data.description;
+  const translateAction = (action: string, data?: TraceData) => {
+    if (data?.description && typeof data.description === 'string') return data.description;
     if (actionMap[action]) return actionMap[action];
     const prefixRules = [
       { prefix: 'Dispatch:', label: '模型分发:' },
@@ -132,11 +150,11 @@ export function SequenceObserver({
         const timeA = new Date(a.timestamp).toISOString();
         const timeB = new Date(b.timestamp).toISOString();
         if (timeA !== timeB) return timeA.localeCompare(timeB);
-        return a.originalIdx - b.originalIdx;
+        return (a.originalIdx || 0) - (b.originalIdx || 0);
       });
 
-    const result: any[] = [];
-    let streamingStart: any = null;
+    const result: ProcessedTrace[] = [];
+    let streamingStart: ProcessedTrace | null = null;
 
     sorted.forEach((t) => {
       const isStreamStart = t.action === 'Streaming Content';
@@ -162,7 +180,12 @@ export function SequenceObserver({
     });
 
     if (streamingStart) {
-      result.push({ ...streamingStart, durationMs: 0, endTimestamp: streamingStart.timestamp });
+      const base = streamingStart as ProcessedTrace;
+      result.push({
+        ...base,
+        durationMs: 0,
+        endTimestamp: base.timestamp,
+      });
     }
     return result;
   }, [currentSession, activeTraceIndex]);
@@ -187,9 +210,9 @@ export function SequenceObserver({
       if (src === 'Frontend') src = 'User';
       if (tgt === 'Frontend') tgt = 'User';
 
-      let label = translateAction(t.action, t.data);
-      if (t.data?.internal_component) {
-        label += ` (${t.data.internal_component})`;
+      let label = translateAction(t.action, t.data as TraceData);
+      if ((t.data as TraceData)?.internal_component) {
+        label += ` (${(t.data as TraceData).internal_component})`;
       }
       // Cleanup label for Mermaid
       label = label.replace(/[:;]/g, ' ');
@@ -326,12 +349,12 @@ export function SequenceObserver({
                                 <span
                                   className={`text-xs font-bold whitespace-nowrap ${t.source === 'Core' || t.target === 'Core' ? 'text-emerald-700' : 'text-slate-700'}`}
                                 >
-                                  {t.data?.is_pass && (
+                                  {(t.data as TraceData)?.is_pass && (
                                     <span className="mr-1.5 rounded border border-amber-200 bg-amber-100 px-1 py-0.5 text-[8px] font-black tracking-tighter text-amber-700 uppercase">
                                       Pass
                                     </span>
                                   )}
-                                  {translateAction(t.action, t.data)}
+                                  {translateAction(t.action, t.data as TraceData)}
                                 </span>
                                 <span className="ml-1 font-mono text-[10px] font-medium text-amber-500">
                                   {durationStr}
@@ -420,21 +443,22 @@ export function SequenceObserver({
             <div className="custom-scrollbar flex-1 space-y-8 overflow-y-auto p-6">
               {(() => {
                 const currentTrace = processedTraces[selectedTraceId];
+                const data = (currentTrace.data as unknown as TraceData) || {};
                 return (
                   <div className="space-y-8">
                     <div className="flex flex-col gap-4">
                       <div className="flex items-center gap-3">
                         <div
-                          className={`flex h-8 w-8 items-center justify-center rounded-lg text-sm font-black shadow-sm ${currentTrace.data?.is_pass ? 'bg-amber-500 text-white' : 'bg-emerald-600 text-white'}`}
+                          className={`flex h-8 w-8 items-center justify-center rounded-lg text-sm font-black shadow-sm ${data.is_pass ? 'bg-amber-500 text-white' : 'bg-emerald-600 text-white'}`}
                         >
-                          {currentTrace.data?.is_pass ? 'P' : `#${selectedTraceId + 1}`}
+                          {data.is_pass ? 'P' : `#${selectedTraceId + 1}`}
                         </div>
                         <div className="flex flex-col">
                           <div className="flex items-center gap-2">
                             <h3 className="text-lg font-bold tracking-tight text-slate-800">
-                              {translateAction(currentTrace.action, currentTrace.data)}
+                              {translateAction(currentTrace.action, data)}
                             </h3>
-                            {currentTrace.data?.is_pass && (
+                            {data.is_pass && (
                               <span className="rounded-full border border-amber-200 bg-amber-100 px-1.5 py-0.5 text-[9px] font-black text-amber-700 uppercase">
                                 Pipeline Pass
                               </span>
@@ -463,21 +487,19 @@ export function SequenceObserver({
                       </div>
 
                       {/* Pipeline 内部组件展示 */}
-                      {currentTrace.data?.internal_component && (
+                      {data.internal_component && (
                         <div className="flex items-center justify-between rounded-xl border border-amber-100 bg-amber-50/50 p-4">
                           <div>
                             <div className="mb-1 text-[10px] font-black text-amber-400 uppercase">
-                              {currentTrace.data?.is_pass
-                                ? '管线逻辑 (Pass Logic)'
-                                : '执行组件 (Component)'}
+                              {data.is_pass ? '管线逻辑 (Pass Logic)' : '执行组件 (Component)'}
                             </div>
                             <div className="font-mono text-sm font-bold text-amber-700">
-                              {currentTrace.data?.is_pass
-                                ? currentTrace.data.pass_name
-                                : currentTrace.data.internal_component}
+                              {data.is_pass
+                                ? String(data.pass_name || '')
+                                : String(data.internal_component || '')}
                             </div>
                           </div>
-                          {currentTrace.data?.is_pass ? (
+                          {data.is_pass ? (
                             <Activity size={24} className="text-amber-400" />
                           ) : (
                             <Cpu size={24} className="text-amber-300" />
@@ -494,8 +516,8 @@ export function SequenceObserver({
                           interfaceName = currentTrace.action
                             .replace('Call ', '')
                             .replace(' API', '');
-                        } else if (currentTrace.data?.model) {
-                          interfaceName = currentTrace.data.model;
+                        } else if (data.model) {
+                          interfaceName = String(data.model);
                         }
 
                         if (!interfaceName) return null;
@@ -516,7 +538,7 @@ export function SequenceObserver({
                       })()}
 
                       {/* 新增：服务路径 (Endpoint) 展示 */}
-                      {currentTrace.data?.endpoint && (
+                      {data.endpoint && (
                         <div className="flex items-center gap-3 rounded-xl border border-slate-800 bg-slate-900 p-3">
                           <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-slate-800">
                             <Monitor size={14} className="text-emerald-500" />
@@ -526,7 +548,7 @@ export function SequenceObserver({
                               服务路径 (Endpoint)
                             </div>
                             <div className="truncate font-mono text-xs text-emerald-400">
-                              {currentTrace.data.endpoint}
+                              {String(data.endpoint)}
                             </div>
                           </div>
                         </div>
@@ -534,16 +556,16 @@ export function SequenceObserver({
                     </div>
 
                     {/* 新增：处理后的上下文展示 */}
-                    {currentTrace.data?.messages && Array.isArray(currentTrace.data.messages) && (
+                    {data.messages && Array.isArray(data.messages) && (
                       <div className="space-y-3">
                         <div className="flex items-center gap-2 text-[10px] font-black tracking-wider text-slate-400 uppercase">
                           <span>处理后的上下文 (Processed Context)</span>
                           <span className="rounded bg-slate-100 px-1.5 py-0.5 text-[9px] font-bold text-slate-500">
-                            {currentTrace.data.messages.length} 条消息
+                            {data.messages.length} 条消息
                           </span>
                         </div>
                         <div className="flex flex-col gap-3">
-                          {currentTrace.data.messages.map((m: any, i: number) => (
+                          {data.messages.map((m, i) => (
                             <div
                               key={i}
                               className="rounded-xl border border-slate-200/60 bg-slate-50 p-3 shadow-sm transition-shadow hover:shadow-md"
@@ -559,18 +581,18 @@ export function SequenceObserver({
                                           : 'bg-emerald-500 text-white'
                                     }`}
                                   >
-                                    {m.role}
+                                    {String(m.role || '')}
                                   </span>
                                   <span className="text-[10px] font-bold text-slate-400 uppercase">
                                     Message #{i + 1}
                                   </span>
                                 </div>
                                 <span className="rounded border border-slate-100 bg-white px-1.5 py-0.5 font-mono text-[10px] font-medium text-slate-400">
-                                  {(m.content || '').length} 字符
+                                  {String(m.content || '').length} 字符
                                 </span>
                               </div>
                               <div className="custom-scrollbar max-h-32 overflow-y-auto rounded-lg border border-slate-100/50 bg-white/50 p-2 font-sans text-xs leading-relaxed whitespace-pre-wrap text-slate-600">
-                                {m.content}
+                                {String(m.content || '')}
                               </div>
                             </div>
                           ))}
@@ -579,41 +601,40 @@ export function SequenceObserver({
                     )}
 
                     {/* 新增：内部执行日志展示 (针对折叠后的 Pass) */}
-                    {currentTrace.data?.internal_logs &&
-                      Array.isArray(currentTrace.data.internal_logs) && (
-                        <div className="space-y-3">
-                          <div className="text-[10px] font-black tracking-wider text-slate-400 uppercase">
-                            执行详情 (Internal Details)
-                          </div>
-                          <div className="space-y-2">
-                            {currentTrace.data.internal_logs.map((log: any, i: number) => (
-                              <div
-                                key={i}
-                                className="rounded-xl border border-slate-800 bg-slate-900 p-3"
-                              >
-                                <div className="mb-2 flex items-center justify-between">
-                                  <span className="text-[10px] font-black text-amber-500 uppercase">
-                                    {log.internal_action}
-                                  </span>
-                                  <span className="font-mono text-[9px] text-slate-500">
-                                    {log.internal_component}
-                                  </span>
-                                </div>
-                                <pre className="overflow-x-auto font-mono text-[10px] text-slate-400">
-                                  {JSON.stringify(
-                                    log,
-                                    (k, v) =>
-                                      ['internal_action', 'internal_component'].includes(k)
-                                        ? undefined
-                                        : v,
-                                    2,
-                                  )}
-                                </pre>
-                              </div>
-                            ))}
-                          </div>
+                    {data.internal_logs && Array.isArray(data.internal_logs) && (
+                      <div className="space-y-3">
+                        <div className="text-[10px] font-black tracking-wider text-slate-400 uppercase">
+                          执行详情 (Internal Details)
                         </div>
-                      )}
+                        <div className="space-y-2">
+                          {data.internal_logs.map((log, i) => (
+                            <div
+                              key={i}
+                              className="rounded-xl border border-slate-800 bg-slate-900 p-3"
+                            >
+                              <div className="mb-2 flex items-center justify-between">
+                                <span className="text-[10px] font-black text-amber-500 uppercase">
+                                  {String(log.internal_action || '')}
+                                </span>
+                                <span className="font-mono text-[9px] text-slate-500">
+                                  {String(log.internal_component || '')}
+                                </span>
+                              </div>
+                              <pre className="overflow-x-auto font-mono text-[10px] text-slate-400">
+                                {JSON.stringify(
+                                  log,
+                                  (k, v) =>
+                                    ['internal_action', 'internal_component'].includes(k)
+                                      ? undefined
+                                      : v,
+                                  2,
+                                )}
+                              </pre>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
 
                     <div className="space-y-3">
                       <div className="flex items-center justify-between">

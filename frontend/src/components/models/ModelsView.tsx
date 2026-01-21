@@ -221,8 +221,11 @@ export function ModelsView({ onBack, appConfigs, setAppConfigs }: ModelsViewProp
           `> 向量维度: ${vector.length}`,
           `> 预览 (前5位): [${vector.slice(0, 5).join(', ')} ...]`,
         ]);
-      } catch (err: any) {
-        setTestLogs((prev) => [...prev, `> 向量化失败: ${err.message}`]);
+      } catch (err: unknown) {
+        setTestLogs((prev) => [
+          ...prev,
+          `> 向量化失败: ${err instanceof Error ? err.message : String(err)}`,
+        ]);
       } finally {
         setIsTesting(false);
       }
@@ -287,8 +290,11 @@ export function ModelsView({ onBack, appConfigs, setAppConfigs }: ModelsViewProp
         }
       }
       setTestLogs((prev) => [...prev, `> 诊断结束。总耗时: ${Date.now() - start}ms`]);
-    } catch (err: any) {
-      setTestLogs((prev) => [...prev, `> 错误: ${err.message}`]);
+    } catch (err: unknown) {
+      setTestLogs((prev) => [
+        ...prev,
+        `> 错误: ${err instanceof Error ? err.message : String(err)}`,
+      ]);
     } finally {
       setIsTesting(false);
     }
@@ -581,7 +587,7 @@ export function ModelsView({ onBack, appConfigs, setAppConfigs }: ModelsViewProp
                             </label>
                             <input
                               className="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 font-mono text-sm shadow-sm focus:ring-2 focus:ring-indigo-500/10"
-                              value={selectedModel.config.model || ''}
+                              value={(selectedModel.config.model as string) || ''}
                               placeholder={
                                 selectedModel.purpose === 'embedding'
                                   ? 'text-embedding-3-small'
@@ -602,7 +608,7 @@ export function ModelsView({ onBack, appConfigs, setAppConfigs }: ModelsViewProp
                           </label>
                           <input
                             className="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 font-mono text-sm shadow-sm outline-none focus:ring-2 focus:ring-indigo-500/10"
-                            value={selectedModel.config.base_url || ''}
+                            value={(selectedModel.config.base_url as string) || ''}
                             placeholder="https://..."
                             onChange={(e) =>
                               setSelectedModel({
@@ -619,7 +625,7 @@ export function ModelsView({ onBack, appConfigs, setAppConfigs }: ModelsViewProp
                           <input
                             type="password"
                             className="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 font-mono text-sm shadow-sm outline-none focus:ring-2 focus:ring-indigo-500/10"
-                            value={selectedModel.config.api_key || ''}
+                            value={(selectedModel.config.api_key as string) || ''}
                             placeholder="sk-..."
                             onChange={(e) =>
                               setSelectedModel({
@@ -705,7 +711,7 @@ export function ModelsView({ onBack, appConfigs, setAppConfigs }: ModelsViewProp
                                   typeof value === 'object' ? JSON.stringify(value) : String(value)
                                 }
                                 onChange={(e) => {
-                                  let val: any = e.target.value;
+                                  let val: string | number | boolean = e.target.value;
                                   if (val === 'true') val = true;
                                   else if (val === 'false') val = false;
                                   else if (!isNaN(Number(val)) && val.trim() !== '')

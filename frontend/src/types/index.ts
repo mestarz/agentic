@@ -2,7 +2,7 @@ export interface TraceEvent {
   source: string;
   target: string;
   action: string;
-  data?: any;
+  data?: Record<string, unknown>;
   timestamp: string;
 }
 
@@ -10,7 +10,7 @@ export interface Message {
   role: string;
   content: string;
   timestamp: string;
-  meta?: any;
+  meta?: Record<string, unknown>;
   traces?: TraceEvent[];
 }
 
@@ -50,7 +50,7 @@ export interface ModelAdapterConfig {
   purpose: 'chat' | 'embedding';
   type: string;
   script_content?: string;
-  config: Record<string, any>;
+  config: Record<string, unknown>;
 }
 
 export interface AppConfigs {

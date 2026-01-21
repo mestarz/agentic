@@ -8,7 +8,7 @@ import {
   Edit2,
   Check,
 } from 'lucide-react';
-import type { SessionSummary } from '../../types';
+import type { Session, SessionSummary } from '../../types';
 import { useState } from 'react';
 
 interface SessionSidebarProps {
@@ -22,7 +22,7 @@ interface SessionSidebarProps {
   toggleSelect: (id: string) => void;
   toggleSelectAll: () => void;
   setSelectedId: (id: string | null) => void;
-  setCurrentSession: (session: any) => void;
+  setCurrentSession: (session: Session | null) => void;
 }
 
 export function SessionSidebar({

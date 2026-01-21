@@ -15,7 +15,9 @@ export function useConfig() {
             ragEmbeddingModelID: parsed.ragEmbeddingModelID || DEFAULT_CONFIGS.ragEmbeddingModelID,
           };
         }
-      } catch (e) {}
+      } catch (err) {
+        console.warn('Failed to parse saved configs:', err);
+      }
     }
     return { ...DEFAULT_CONFIGS };
   });
@@ -42,8 +44,8 @@ export function useConfig() {
         } else {
           setQdrantStatus('disconnected');
         }
-      } catch (err: any) {
-        if (err.name !== 'AbortError') {
+      } catch (err: unknown) {
+        if (err instanceof Error && err.name !== 'AbortError') {
           setQdrantStatus('disconnected');
         }
       }

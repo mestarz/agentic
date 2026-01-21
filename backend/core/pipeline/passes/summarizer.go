@@ -3,11 +3,11 @@ package passes
 import (
 	"bytes"
 	"context"
+	"context-fabric/backend/core/domain"
+	"context-fabric/backend/core/pipeline"
 	"encoding/json"
 	"fmt"
 	"net/http"
-	"context-fabric/backend/core/domain"
-	"context-fabric/backend/core/pipeline"
 	"time"
 )
 
@@ -50,8 +50,8 @@ func (p *SummarizerPass) Run(ctx context.Context, data *pipeline.ContextData) er
 	if splitIdx <= 0 {
 		return nil
 	}
-	
-toSummarize := data.Messages[:splitIdx]
+
+	toSummarize := data.Messages[:splitIdx]
 	recentMessages := data.Messages[splitIdx:]
 
 	// 序列化待摘要的内容
@@ -69,12 +69,12 @@ toSummarize := data.Messages[:splitIdx]
 			"target": "LLMService",
 			"action": "SummarizeError",
 			"data": map[string]interface{}{
-				"error":    err.Error(),
-				"model_id": p.ModelID,
+				"error":     err.Error(),
+				"model_id":  p.ModelID,
 				"msg_count": len(toSummarize),
 			},
 		})
-		return nil 
+		return nil
 	}
 
 	// 构造摘要消息，作为历史背景注入
@@ -106,7 +106,7 @@ toSummarize := data.Messages[:splitIdx]
 // requestSummary 向 LLM 网关发起同步的摘要请求
 func (p *SummarizerPass) requestSummary(ctx context.Context, text string) (string, error) {
 	prompt := fmt.Sprintf("请简要总结以下对话历史，提取核心事实、用户偏好和重要决策。要求：简洁、客观，不超过 200 字。\n\n对话历史：\n%s", text)
-	
+
 	payload := map[string]interface{}{
 		"model": p.ModelID,
 		"messages": []map[string]string{
@@ -114,7 +114,7 @@ func (p *SummarizerPass) requestSummary(ctx context.Context, text string) (strin
 		},
 		"stream": false,
 	}
-	
+
 	body, _ := json.Marshal(payload)
 	// 构建请求，指回 llm-service 的标准 completions 接口 (带 /v1 前缀)
 	req, err := http.NewRequestWithContext(ctx, "POST", p.LLMServiceURL+"/v1/chat/completions", bytes.NewBuffer(body))

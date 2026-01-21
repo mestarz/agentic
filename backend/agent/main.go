@@ -40,7 +40,7 @@ func main() {
 			http.Error(w, err.Error(), http.StatusBadRequest)
 			return
 		}
-		
+
 		// Validate required fields
 		if req.AgentModelID == "" {
 			http.Error(w, "agent_model_id is required", http.StatusBadRequest)
@@ -59,7 +59,7 @@ func main() {
 			http.Error(w, "Streaming not supported", http.StatusInternalServerError)
 			return
 		}
-		
+
 		out := make(chan string)
 		go svc.Chat(r.Context(), req.SessionID, req.Query, req.AgentModelID, req.CoreModelID, out)
 		for c := range out {
@@ -67,7 +67,7 @@ func main() {
 			flusher.Flush()
 		}
 	})
-	
+
 	// Proxy to LLM Gateway for model management
 	mux.HandleFunc("/api/models/", func(w http.ResponseWriter, r *http.Request) {
 		// Strip /api/models and forward to /v1 (e.g., /api/models/models -> /v1/models)

@@ -56,13 +56,9 @@ func (h *ContextHandler) GetContext(w http.ResponseWriter, r *http.Request) {
 
 type AdminHandler struct{ history *history.Service }
 
-
-
 // NewAdminHandler 创建一个新的 AdminHandler 实例
 
 func NewAdminHandler(h *history.Service) *AdminHandler { return &AdminHandler{history: h} }
-
-
 
 // parseID 从请求路径中解析资源 ID (预期路径格式: /api/admin/resource/id)
 
@@ -79,8 +75,6 @@ func (h *AdminHandler) parseID(r *http.Request) string {
 	return ""
 
 }
-
-
 
 // ServeTestCases 提供测试用例的增删改查功能
 
@@ -140,18 +134,14 @@ func (h *AdminHandler) ServeTestCases(w http.ResponseWriter, r *http.Request) {
 
 	}
 
-
-
 	// 创建测试用例: POST /api/admin/testcases
 
 	if r.Method == http.MethodPost {
 
 		var req struct {
-
 			SessionID string `json:"session_id"`
 
-			Name      string `json:"name"`
-
+			Name string `json:"name"`
 		}
 
 		json.NewDecoder(r.Body).Decode(&req)
@@ -166,8 +156,6 @@ func (h *AdminHandler) ServeTestCases(w http.ResponseWriter, r *http.Request) {
 
 	}
 
-
-
 	// 列表查询请求: GET /api/admin/testcases
 
 	l, _ := h.history.ListTestCases(r.Context())
@@ -177,8 +165,6 @@ func (h *AdminHandler) ServeTestCases(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(l)
 
 }
-
-
 
 // ServeSessions 提供会话列表查询、详情获取及删除功能
 
@@ -203,9 +189,7 @@ func (h *AdminHandler) ServeSessions(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodPatch {
 
 			var req struct {
-
 				Name string `json:"name"`
-
 			}
 
 			json.NewDecoder(r.Body).Decode(&req)

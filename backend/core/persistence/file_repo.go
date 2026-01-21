@@ -29,10 +29,10 @@ func NewFileHistoryRepository(basePath string) (*FileHistoryRepository, error) {
 func (r *FileHistoryRepository) SaveSession(ctx context.Context, session *domain.Session) error {
 	r.mu.Lock()
 	defer r.mu.Unlock()
-	
+
 	filePath := r.sessionPath(session.ID)
 	data, _ := json.MarshalIndent(session, "", "  ")
-	
+
 	// 使用临时文件写入并重命名，确保原子性
 	tmpPath := filePath + ".tmp"
 	os.WriteFile(tmpPath, data, 0644)
@@ -43,7 +43,7 @@ func (r *FileHistoryRepository) SaveSession(ctx context.Context, session *domain
 func (r *FileHistoryRepository) GetSession(ctx context.Context, id string) (*domain.Session, error) {
 	r.mu.RLock()
 	defer r.mu.RUnlock()
-	
+
 	data, err := os.ReadFile(r.sessionPath(id))
 	if err != nil {
 		return nil, err
@@ -57,7 +57,7 @@ func (r *FileHistoryRepository) GetSession(ctx context.Context, id string) (*dom
 func (r *FileHistoryRepository) ListSessions(ctx context.Context) ([]*domain.SessionSummary, error) {
 	r.mu.RLock()
 	defer r.mu.RUnlock()
-	
+
 	files, _ := os.ReadDir(r.basePath)
 	var list []*domain.SessionSummary
 	for _, f := range files {
@@ -65,8 +65,10 @@ func (r *FileHistoryRepository) ListSessions(ctx context.Context) ([]*domain.Ses
 			continue
 		}
 		data, err := os.ReadFile(filepath.Join(r.basePath, f.Name()))
-		if err != nil { continue }
-		
+		if err != nil {
+			continue
+		}
+
 		var s domain.Session
 		json.Unmarshal(data, &s)
 		list = append(list, &domain.SessionSummary{
@@ -77,7 +79,7 @@ func (r *FileHistoryRepository) ListSessions(ctx context.Context) ([]*domain.Ses
 			MsgCount:  len(s.Messages),
 		})
 	}
-	
+
 	// 按更新时间倒序排列
 	sort.Slice(list, func(i, j int) bool { return list[i].UpdatedAt.After(list[j].UpdatedAt) })
 	return list, nil
@@ -108,19 +110,13 @@ func (r *FileHistoryRepository) sessionPath(id string) string {
 
 }
 
-
-
 // FileTestCaseRepository 基于文件系统的测试用例持久化实现
 
 type FileTestCaseRepository struct {
-
 	basePath string
 
-	mu       sync.RWMutex
-
+	mu sync.RWMutex
 }
-
-
 
 // NewFileTestCaseRepository 创建一个新的测试用例文件存储库
 
@@ -135,8 +131,6 @@ func NewFileTestCaseRepository(basePath string) (*FileTestCaseRepository, error)
 	return &FileTestCaseRepository{basePath: basePath}, nil
 
 }
-
-
 
 // SaveTestCase 将测试用例持久化到磁盘
 
@@ -153,8 +147,6 @@ func (r *FileTestCaseRepository) SaveTestCase(ctx context.Context, tc *domain.Te
 	return os.WriteFile(filePath, data, 0644)
 
 }
-
-
 
 // GetTestCase 从磁盘读取测试用例
 
@@ -179,8 +171,6 @@ func (r *FileTestCaseRepository) GetTestCase(ctx context.Context, id string) (*d
 	return &tc, nil
 
 }
-
-
 
 // ListTestCases 列出所有测试用例摘要
 
@@ -216,14 +206,13 @@ func (r *FileTestCaseRepository) ListTestCases(ctx context.Context) ([]*domain.T
 
 		list = append(list, &domain.TestCaseSummary{
 
-			ID:        tc.ID,
+			ID: tc.ID,
 
-			Name:      tc.Name,
+			Name: tc.Name,
 
 			CreatedAt: tc.CreatedAt,
 
 			StepCount: len(tc.Prompts),
-
 		})
 
 	}
@@ -233,8 +222,6 @@ func (r *FileTestCaseRepository) ListTestCases(ctx context.Context) ([]*domain.T
 	return list, nil
 
 }
-
-
 
 // DeleteTestCase 删除测试用例
 

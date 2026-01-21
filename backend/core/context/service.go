@@ -41,7 +41,7 @@ func (e *Engine) BuildPayload(ctx stdctx.Context, id string, query string, model
 		Meta:      make(map[string]interface{}),
 		Traces:    make([]map[string]interface{}, 0),
 	}
-	
+
 	// 注入初始上下文元数据
 	data.Meta["query"] = query
 	data.Meta["model_id"] = modelID
@@ -55,11 +55,11 @@ func (e *Engine) BuildPayload(ctx stdctx.Context, id string, query string, model
 	// 将 Pipeline 中收集的 Trace 信息转换为 domain.TraceEvent，并附着到最后一条消息上
 	if len(data.Messages) > 0 {
 		lastMsg := &data.Messages[len(data.Messages)-1]
-		
+
 		var domainTraces []domain.TraceEvent
 		var internalDetails []map[string]interface{}
 		baseTime := time.Now()
-		
+
 		for _, t := range data.Traces {
 			src, _ := t["source"].(string)
 			act, _ := t["action"].(string)
@@ -67,7 +67,7 @@ func (e *Engine) BuildPayload(ctx stdctx.Context, id string, query string, model
 			if dat == nil {
 				dat = make(map[string]interface{})
 			}
-			
+
 			// 3.1 过滤掉冗余的管线级元数据，避免时序图过度拥挤
 			if (src == "Core" || src == "Pipeline") && (act == "Start" || act == "Finished") {
 				continue
@@ -83,7 +83,7 @@ func (e *Engine) BuildPayload(ctx stdctx.Context, id string, query string, model
 					dat["internal_logs"] = internalDetails
 					internalDetails = nil // 重置缓冲区
 				}
-				
+
 				domainTraces = append(domainTraces, domain.TraceEvent{
 					Source:    "Core",
 					Target:    "Core",
@@ -100,9 +100,9 @@ func (e *Engine) BuildPayload(ctx stdctx.Context, id string, query string, model
 			dat["internal_component"] = src
 			internalDetails = append(internalDetails, dat)
 		}
-		
+
 		lastMsg.Traces = append(lastMsg.Traces, domainTraces...)
-		
+
 		// 合并 Meta
 		if lastMsg.Meta == nil {
 			lastMsg.Meta = make(map[string]interface{})
@@ -137,7 +137,7 @@ func (s *Service) AppendMessage(ctx stdctx.Context, id string, msg domain.Messag
 	if err != nil {
 		return nil, err
 	}
-	
+
 	// 临时元数据标记
 	meta := map[string]interface{}{"status": "appended"}
 	s.historySvc.UpdateLastMessageMeta(ctx, id, meta)
@@ -149,18 +149,18 @@ func (s *Service) AppendMessage(ctx stdctx.Context, id string, msg domain.Messag
 func (s *Service) GetOptimizedContext(ctx stdctx.Context, id, query string, modelID string) ([]domain.Message, error) {
 	// 1. 自动确保 Session 环境存在
 	s.historySvc.GetOrCreateSession(ctx, id, "auto")
-	
+
 	// 2. 将当前用户提问持久化到历史库中
 	userMsg := domain.Message{Role: domain.RoleUser, Content: query, Timestamp: time.Now()}
 	s.historySvc.Append(ctx, id, userMsg)
-	
+
 	// 3. 调用核心引擎通过 Pipeline 构建优化后的消息 Payload
 	payload, err := s.engine.BuildPayload(ctx, id, query, modelID)
-	
+
 	// 4. 将处理后的元数据（如 Token 统计）同步更新到持久化库的消息 Meta 中
 	if err == nil && len(payload) > 0 {
 		s.historySvc.UpdateLastMessageMeta(ctx, id, payload[len(payload)-1].Meta)
 	}
-	
+
 	return payload, err
 }

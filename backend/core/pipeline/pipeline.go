@@ -24,7 +24,7 @@ func NewPipeline(passes ...Pass) *Pipeline {
 // 它会初始化上下文环境，并为每个 Pass 生成包含消息快照的 Trace 记录。
 func (p *Pipeline) Execute(ctx context.Context, data *ContextData) error {
 	totalStart := time.Now()
-	
+
 	// 初始化元数据和追踪容器
 	if data.Meta == nil {
 		data.Meta = make(map[string]interface{})
@@ -56,7 +56,7 @@ func (p *Pipeline) Execute(ctx context.Context, data *ContextData) error {
 		}
 
 		duration := time.Since(start).Milliseconds()
-		
+
 		// 记录 Pass 执行完成的 Trace，并捕获当前的消息列表快照
 		data.Traces = append(data.Traces, map[string]interface{}{
 			"source": "Pipeline",

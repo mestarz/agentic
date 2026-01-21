@@ -189,7 +189,7 @@ func (s *AgentService) Chat(ctx context.Context, id, query string, agentModelID,
 	// 1. 先记录起点 Trace
 	trace("Frontend", "Agent", "Receive Query", query)
 	trace("Agent", "Core", "Get Optimized Context", map[string]interface{}{
-		"query": query, 
+		"query":    query,
 		"model_id": coreModelID,
 		"endpoint": "/api/v1/context",
 	})
@@ -292,6 +292,6 @@ func (s *AgentService) Chat(ctx context.Context, id, query string, agentModelID,
 	if err != nil {
 		send(SSEResponse{Type: "chunk", Content: "LLM 网关错误: " + err.Error()})
 	}
-	
+
 	close(internal)
 }

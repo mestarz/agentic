@@ -11,12 +11,12 @@ type ContextData struct {
 	// SessionID 当前会话的唯一标识
 	SessionID string
 	// Messages 当前管线中正在处理的消息列表
-	Messages  []domain.Message
-	
+	Messages []domain.Message
+
 	// Meta 用于在不同 Pass 之间传递临时或统计数据。
 	// 例如：Token 计数结果、检索到的知识片段等。
 	Meta map[string]interface{}
-	
+
 	// Traces 收集 Pipeline 执行过程中的关键路径信息。
 	// 这些信息最终会被归一化并展示在前端的交互观测仪中。
 	Traces []map[string]interface{}

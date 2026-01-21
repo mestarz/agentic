@@ -54,7 +54,7 @@ func main() {
 	log.Printf("[CORE] Session storage: %s", sessionDir)
 	log.Printf("[CORE] TestCase storage: %s", testcaseDir)
 	log.Printf("[CORE] LLM Service URL: %s", llmServiceURL)
-	
+
 	repo, _ := persistence.NewFileHistoryRepository(sessionDir)
 	tcRepo, _ := persistence.NewFileTestCaseRepository(testcaseDir)
 
@@ -65,13 +65,13 @@ func main() {
 
 	// 3. 配置路由
 	mux := http.NewServeMux()
-	
+
 	// 上下文业务接口
 	ctxHandler := api.NewContextHandler(cSvc)
 	mux.HandleFunc("/api/v1/sessions", ctxHandler.CreateSession)
 	mux.HandleFunc("/api/v1/messages", ctxHandler.AppendMessage)
 	mux.HandleFunc("/api/v1/context", ctxHandler.GetContext)
-	
+
 	// 管理后台接口
 	admin := api.NewAdminHandler(hSvc)
 	mux.HandleFunc("/api/admin/sessions", admin.ServeSessions)

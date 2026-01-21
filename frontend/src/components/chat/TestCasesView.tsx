@@ -1,5 +1,18 @@
 import { useState, useEffect } from 'react';
-import { Beaker, Play, Trash2, Clock, ListChecks, ArrowLeft, Edit3, Plus, Save, X, GripVertical, ChevronRight } from 'lucide-react';
+import {
+  Beaker,
+  Play,
+  Trash2,
+  Clock,
+  ListChecks,
+  ArrowLeft,
+  Edit3,
+  Plus,
+  Save,
+  X,
+  GripVertical,
+  ChevronRight,
+} from 'lucide-react';
 import type { TestCase, TestCaseSummary } from '../../types';
 
 interface TestCasesViewProps {
@@ -25,7 +38,7 @@ export function TestCasesView({ onBack, onRun }: TestCasesViewProps) {
       const data = await resp.json();
       setTestCases(data || []);
     } catch (e) {
-      console.error("Failed to fetch test cases", e);
+      console.error('Failed to fetch test cases', e);
     } finally {
       setLoading(false);
     }
@@ -38,7 +51,7 @@ export function TestCasesView({ onBack, onRun }: TestCasesViewProps) {
       setEditingTestCase(data);
       setOriginalTestCase(data);
     } catch (e) {
-      console.error("Failed to load test case", e);
+      console.error('Failed to load test case', e);
     }
   };
 
@@ -49,7 +62,7 @@ export function TestCasesView({ onBack, onRun }: TestCasesViewProps) {
       const resp = await fetch(`/api/admin/testcases/${editingTestCase.id}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(editingTestCase)
+        body: JSON.stringify(editingTestCase),
       });
       if (resp.ok) {
         setEditingTestCase(null);
@@ -57,19 +70,19 @@ export function TestCasesView({ onBack, onRun }: TestCasesViewProps) {
         fetchTestCases();
       }
     } catch (e) {
-      console.error("Failed to save test case", e);
+      console.error('Failed to save test case', e);
     } finally {
       setIsSaving(false);
     }
   };
 
   const deleteTestCase = async (id: string) => {
-    if (!confirm("确定要删除此测试用例吗？")) return;
+    if (!confirm('确定要删除此测试用例吗？')) return;
     try {
       await fetch(`/api/admin/testcases/${id}`, { method: 'DELETE' });
       fetchTestCases();
     } catch (e) {
-      console.error("Failed to delete test case", e);
+      console.error('Failed to delete test case', e);
     }
   };
 
@@ -89,7 +102,7 @@ export function TestCasesView({ onBack, onRun }: TestCasesViewProps) {
   const addPrompt = (idx: number) => {
     if (!editingTestCase) return;
     const newPrompts = [...editingTestCase.prompts];
-    newPrompts.splice(idx + 1, 0, "");
+    newPrompts.splice(idx + 1, 0, '');
     setEditingTestCase({ ...editingTestCase, prompts: newPrompts });
   };
 
@@ -97,83 +110,90 @@ export function TestCasesView({ onBack, onRun }: TestCasesViewProps) {
 
   if (editingTestCase) {
     return (
-      <main className="flex-1 bg-slate-50 flex flex-col overflow-hidden">
-        <div className="px-8 py-6 bg-white border-b border-slate-200 flex items-center justify-between shadow-sm">
+      <main className="flex flex-1 flex-col overflow-hidden bg-slate-50">
+        <div className="flex items-center justify-between border-b border-slate-200 bg-white px-8 py-6 shadow-sm">
           <div className="flex items-center gap-4">
-            <button onClick={() => setEditingTestCase(null)} className="p-2 hover:bg-slate-100 rounded-full text-slate-400 transition-colors">
+            <button
+              onClick={() => setEditingTestCase(null)}
+              className="rounded-full p-2 text-slate-400 transition-colors hover:bg-slate-100"
+            >
               <ArrowLeft size={20} />
             </button>
             <div>
               <div className="flex items-center gap-2">
-                <h1 className="text-xl font-black text-slate-800 tracking-tight">编辑测试用例</h1>
-                <span className="text-[10px] font-mono text-slate-400 bg-slate-100 px-1.5 py-0.5 rounded uppercase">{editingTestCase.id}</span>
+                <h1 className="text-xl font-black tracking-tight text-slate-800">编辑测试用例</h1>
+                <span className="rounded bg-slate-100 px-1.5 py-0.5 font-mono text-[10px] text-slate-400 uppercase">
+                  {editingTestCase.id}
+                </span>
               </div>
-              <input 
-                className="text-xs font-bold text-indigo-600 uppercase tracking-widest bg-transparent border-none outline-none focus:ring-0 p-0"
+              <input
+                className="border-none bg-transparent p-0 text-xs font-bold tracking-widest text-indigo-600 uppercase outline-none focus:ring-0"
                 value={editingTestCase.name}
-                onChange={e => setEditingTestCase({...editingTestCase, name: e.target.value})}
+                onChange={(e) => setEditingTestCase({ ...editingTestCase, name: e.target.value })}
               />
             </div>
           </div>
           <div className="flex items-center gap-3">
-            <button 
+            <button
               onClick={() => setEditingTestCase(null)}
-              className="px-4 py-2 text-slate-500 font-bold text-xs uppercase hover:bg-slate-100 rounded-xl transition-all"
+              className="rounded-xl px-4 py-2 text-xs font-bold text-slate-500 uppercase transition-all hover:bg-slate-100"
             >
               取消
             </button>
-            <button 
+            <button
               onClick={saveTestCase}
               disabled={!isModified || isSaving}
-              className="flex items-center gap-2 px-6 py-2 bg-indigo-600 text-white rounded-xl text-xs font-black hover:bg-indigo-700 transition-all uppercase tracking-widest shadow-md shadow-indigo-100 disabled:opacity-30 disabled:grayscale-[0.5] disabled:cursor-not-allowed"
+              className="flex items-center gap-2 rounded-xl bg-indigo-600 px-6 py-2 text-xs font-black tracking-widest text-white uppercase shadow-md shadow-indigo-100 transition-all hover:bg-indigo-700 disabled:cursor-not-allowed disabled:opacity-30 disabled:grayscale-[0.5]"
             >
               <Save size={14} /> {isSaving ? '保存中...' : '保存更改'}
             </button>
           </div>
         </div>
 
-        <div className="flex-1 overflow-y-auto p-8 custom-scrollbar">
-          <div className="max-w-4xl mx-auto space-y-4">
-            <div className="flex items-center justify-between mb-2">
-              <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">测试步骤序列 ({editingTestCase.prompts.length})</span>
-              <button 
+        <div className="custom-scrollbar flex-1 overflow-y-auto p-8">
+          <div className="mx-auto max-w-4xl space-y-4">
+            <div className="mb-2 flex items-center justify-between">
+              <span className="text-[10px] font-black tracking-widest text-slate-400 uppercase">
+                测试步骤序列 ({editingTestCase.prompts.length})
+              </span>
+              <button
                 onClick={() => addPrompt(-1)}
-                className="flex items-center gap-1.5 px-3 py-1.5 bg-white border border-slate-200 text-indigo-600 rounded-lg text-[10px] font-black uppercase hover:border-indigo-300 transition-all shadow-sm"
+                className="flex items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-[10px] font-black text-indigo-600 uppercase shadow-sm transition-all hover:border-indigo-300"
               >
                 <Plus size={12} /> 在开头插入
               </button>
             </div>
-            
+
             {editingTestCase.prompts.map((p, i) => (
               <div key={i} className="group relative">
-                <div className="flex items-start gap-4 bg-white border border-slate-200 rounded-2xl p-4 shadow-sm hover:border-indigo-200 transition-all">
-                  <div className="flex flex-col items-center gap-2 mt-1">
-                    <div className="w-6 h-6 rounded-lg bg-slate-50 text-slate-400 flex items-center justify-center text-[10px] font-black border border-slate-100">
+                <div className="flex items-start gap-4 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm transition-all hover:border-indigo-200">
+                  <div className="mt-1 flex flex-col items-center gap-2">
+                    <div className="flex h-6 w-6 items-center justify-center rounded-lg border border-slate-100 bg-slate-50 text-[10px] font-black text-slate-400">
                       {i + 1}
                     </div>
-                    <div className="w-[1px] flex-1 bg-slate-100 min-h-[20px]"></div>
+                    <div className="min-h-[20px] w-[1px] flex-1 bg-slate-100"></div>
                   </div>
-                  
-                  <div className="flex-1 min-w-0">
-                    <textarea 
-                      className="w-full bg-slate-50/50 border border-transparent focus:border-indigo-100 focus:bg-white rounded-xl p-3 text-sm text-slate-700 outline-none transition-all resize-none min-h-[80px]"
+
+                  <div className="min-w-0 flex-1">
+                    <textarea
+                      className="min-h-[80px] w-full resize-none rounded-xl border border-transparent bg-slate-50/50 p-3 text-sm text-slate-700 transition-all outline-none focus:border-indigo-100 focus:bg-white"
                       value={p}
                       placeholder="输入测试指令..."
-                      onChange={e => updatePrompt(i, e.target.value)}
+                      onChange={(e) => updatePrompt(i, e.target.value)}
                     />
                   </div>
 
-                  <div className="flex flex-col gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
-                    <button 
+                  <div className="flex flex-col gap-2 opacity-0 transition-opacity group-hover:opacity-100">
+                    <button
                       onClick={() => removePrompt(i)}
-                      className="p-2 text-slate-300 hover:text-rose-500 hover:bg-rose-50 rounded-lg transition-all"
+                      className="rounded-lg p-2 text-slate-300 transition-all hover:bg-rose-50 hover:text-rose-500"
                       title="删除此步骤"
                     >
                       <Trash2 size={14} />
                     </button>
-                    <button 
+                    <button
                       onClick={() => addPrompt(i)}
-                      className="p-2 text-slate-300 hover:text-indigo-500 hover:bg-indigo-50 rounded-lg transition-all"
+                      className="rounded-lg p-2 text-slate-300 transition-all hover:bg-indigo-50 hover:text-indigo-500"
                       title="在此之后插入步骤"
                     >
                       <Plus size={14} />
@@ -184,9 +204,14 @@ export function TestCasesView({ onBack, onRun }: TestCasesViewProps) {
             ))}
 
             {editingTestCase.prompts.length === 0 && (
-              <div className="h-32 border-2 border-dashed border-slate-200 rounded-3xl flex flex-col items-center justify-center text-slate-400 gap-2 bg-white/50">
-                <div className="text-xs font-bold uppercase tracking-widest">暂无步骤</div>
-                <button onClick={() => addPrompt(-1)} className="text-indigo-600 text-[10px] font-black uppercase hover:underline">点击添加首个步骤</button>
+              <div className="flex h-32 flex-col items-center justify-center gap-2 rounded-3xl border-2 border-dashed border-slate-200 bg-white/50 text-slate-400">
+                <div className="text-xs font-bold tracking-widest uppercase">暂无步骤</div>
+                <button
+                  onClick={() => addPrompt(-1)}
+                  className="text-[10px] font-black text-indigo-600 uppercase hover:underline"
+                >
+                  点击添加首个步骤
+                </button>
               </div>
             )}
           </div>
@@ -196,77 +221,95 @@ export function TestCasesView({ onBack, onRun }: TestCasesViewProps) {
   }
 
   return (
-    <main className="flex-1 bg-slate-50 flex flex-col overflow-hidden">
-      <div className="px-8 py-6 bg-white border-b border-slate-200 flex items-center justify-between shadow-sm">
+    <main className="flex flex-1 flex-col overflow-hidden bg-slate-50">
+      <div className="flex items-center justify-between border-b border-slate-200 bg-white px-8 py-6 shadow-sm">
         <div className="flex items-center gap-4">
-          <div className="w-10 h-10 rounded-xl bg-amber-100 text-amber-600 flex items-center justify-center">
+          <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-amber-100 text-amber-600">
             <Beaker size={20} />
           </div>
           <div>
-            <h1 className="text-xl font-black text-slate-800 tracking-tight">测试用例库 (Test Cases)</h1>
-            <p className="text-xs text-slate-400 font-bold uppercase tracking-widest mt-0.5">自动化模型能力评测与回归工具</p>
+            <h1 className="text-xl font-black tracking-tight text-slate-800">
+              测试用例库 (Test Cases)
+            </h1>
+            <p className="mt-0.5 text-xs font-bold tracking-widest text-slate-400 uppercase">
+              自动化模型能力评测与回归工具
+            </p>
           </div>
         </div>
-        <button 
+        <button
           onClick={onBack}
-          className="flex items-center gap-2 px-4 py-2 bg-slate-900 text-white rounded-xl text-xs font-bold hover:bg-slate-800 transition-all uppercase tracking-widest"
+          className="flex items-center gap-2 rounded-xl bg-slate-900 px-4 py-2 text-xs font-bold tracking-widest text-white uppercase transition-all hover:bg-slate-800"
         >
           <ArrowLeft size={14} /> 返回对话
         </button>
       </div>
 
-      <div className="flex-1 overflow-y-auto p-8 custom-scrollbar">
-        <div className="max-w-5xl mx-auto space-y-6">
+      <div className="custom-scrollbar flex-1 overflow-y-auto p-8">
+        <div className="mx-auto max-w-5xl space-y-6">
           {loading ? (
-            <div className="h-64 flex items-center justify-center text-slate-300 animate-pulse">
+            <div className="flex h-64 animate-pulse items-center justify-center text-slate-300">
               <ListChecks size={40} />
             </div>
           ) : testCases.length === 0 ? (
-            <div className="h-64 border-2 border-dashed border-slate-200 rounded-3xl flex flex-col items-center justify-center text-slate-400 gap-4 bg-white/50">
+            <div className="flex h-64 flex-col items-center justify-center gap-4 rounded-3xl border-2 border-dashed border-slate-200 bg-white/50 text-slate-400">
               <Beaker size={40} className="opacity-20" />
-              <div className="text-sm font-bold uppercase tracking-widest">暂无测试用例，请先从对话中保存</div>
+              <div className="text-sm font-bold tracking-widest uppercase">
+                暂无测试用例，请先从对话中保存
+              </div>
             </div>
           ) : (
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-              {testCases.map(tc => (
-                <div key={tc.id} className="bg-white border border-slate-200 rounded-3xl p-6 shadow-sm hover:shadow-xl transition-all group relative overflow-hidden">
-                  <div className="absolute top-0 right-0 w-24 h-24 bg-amber-50 rounded-full -translate-y-12 translate-x-12 group-hover:scale-110 transition-transform duration-500 opacity-50"></div>
-                  
+            <div className="grid grid-cols-1 gap-6 md:grid-cols-2 lg:grid-cols-3">
+              {testCases.map((tc) => (
+                <div
+                  key={tc.id}
+                  className="group relative overflow-hidden rounded-3xl border border-slate-200 bg-white p-6 shadow-sm transition-all hover:shadow-xl"
+                >
+                  <div className="absolute top-0 right-0 h-24 w-24 translate-x-12 -translate-y-12 rounded-full bg-amber-50 opacity-50 transition-transform duration-500 group-hover:scale-110"></div>
+
                   <div className="relative z-10">
-                    <div className="flex items-center justify-between mb-4">
-                      <span className="text-[10px] font-black text-amber-600 bg-amber-50 px-2 py-1 rounded-lg uppercase border border-amber-100">{tc.id}</span>
-                      <div className="flex items-center gap-1 text-slate-400 text-[10px] font-bold">
+                    <div className="mb-4 flex items-center justify-between">
+                      <span className="rounded-lg border border-amber-100 bg-amber-50 px-2 py-1 text-[10px] font-black text-amber-600 uppercase">
+                        {tc.id}
+                      </span>
+                      <div className="flex items-center gap-1 text-[10px] font-bold text-slate-400">
                         <Clock size={12} />
                         {new Date(tc.created_at).toLocaleDateString()}
                       </div>
                     </div>
-                    
-                    <h3 className="text-base font-black text-slate-800 mb-2 truncate group-hover:text-indigo-600 transition-colors">{tc.name}</h3>
-                    
-                    <div className="flex items-center gap-4 mb-6">
+
+                    <h3 className="mb-2 truncate text-base font-black text-slate-800 transition-colors group-hover:text-indigo-600">
+                      {tc.name}
+                    </h3>
+
+                    <div className="mb-6 flex items-center gap-4">
                       <div className="flex flex-col">
-                        <span className="text-[9px] font-black text-slate-400 uppercase tracking-tighter">测试步骤</span>
-                        <span className="text-lg font-black text-slate-700 leading-none">{tc.step_count} <small className="text-[10px] text-slate-400">Rounds</small></span>
+                        <span className="text-[9px] font-black tracking-tighter text-slate-400 uppercase">
+                          测试步骤
+                        </span>
+                        <span className="text-lg leading-none font-black text-slate-700">
+                          {tc.step_count}{' '}
+                          <small className="text-[10px] text-slate-400">Rounds</small>
+                        </span>
                       </div>
                     </div>
 
                     <div className="flex flex-col gap-2">
-                      <button 
+                      <button
                         onClick={() => onRun(tc.id)}
-                        className="w-full flex items-center justify-center gap-2 py-2.5 bg-emerald-600 text-white rounded-xl font-black text-[10px] uppercase tracking-widest hover:bg-emerald-700 shadow-md shadow-emerald-100 transition-all active:scale-95"
+                        className="flex w-full items-center justify-center gap-2 rounded-xl bg-emerald-600 py-2.5 text-[10px] font-black tracking-widest text-white uppercase shadow-md shadow-emerald-100 transition-all hover:bg-emerald-700 active:scale-95"
                       >
                         <Play size={14} fill="currentColor" /> 执行测试
                       </button>
                       <div className="flex gap-2">
-                        <button 
+                        <button
                           onClick={() => loadTestCaseForEdit(tc.id)}
-                          className="flex-1 flex items-center justify-center gap-2 py-2 bg-slate-50 text-slate-600 rounded-xl text-[10px] font-black uppercase hover:bg-indigo-50 hover:text-indigo-600 transition-all border border-slate-100"
+                          className="flex flex-1 items-center justify-center gap-2 rounded-xl border border-slate-100 bg-slate-50 py-2 text-[10px] font-black text-slate-600 uppercase transition-all hover:bg-indigo-50 hover:text-indigo-600"
                         >
                           <Edit3 size={14} /> 编辑
                         </button>
-                        <button 
+                        <button
                           onClick={() => deleteTestCase(tc.id)}
-                          className="p-2 bg-slate-50 text-slate-400 rounded-xl hover:bg-rose-50 hover:text-rose-600 transition-all border border-slate-100"
+                          className="rounded-xl border border-slate-100 bg-slate-50 p-2 text-slate-400 transition-all hover:bg-rose-50 hover:text-rose-600"
                         >
                           <Trash2 size={14} />
                         </button>

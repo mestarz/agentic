@@ -13,7 +13,8 @@ bin/
 logs/
 *.log
 
-# Data (Conversations)
+# Data (Conversations & Database)
+data/qdrant/
 data/sessions/*.json
 backend/core/data/sessions/
 !data/sessions/.gitkeep

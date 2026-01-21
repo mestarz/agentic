@@ -44,10 +44,10 @@ export interface TestCaseSummary {
   step_count: number;
 }
 
-
 export interface ModelAdapterConfig {
   id: string;
   name: string;
+  purpose: 'chat' | 'embedding';
   type: string;
   script_content?: string;
   config: Record<string, any>;
@@ -55,10 +55,20 @@ export interface ModelAdapterConfig {
 
 export interface AppConfigs {
   agentModelID: string;
+
   coreModelID: string;
+
+  ragEnabled: boolean;
+
+  ragEmbeddingModelID: string;
 }
 
 export const DEFAULT_CONFIGS: AppConfigs = {
   agentModelID: 'mock-model',
+
   coreModelID: 'mock-model',
+
+  ragEnabled: false,
+
+  ragEmbeddingModelID: 'text-embedding-3-small',
 };

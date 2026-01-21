@@ -21,6 +21,7 @@ type Engine struct {
 func NewEngine(h *history.Service, llmServiceURL string) *Engine {
 	pl := pipeline.NewPipeline(
 		passes.NewHistoryLoader(h),
+		passes.NewRAGPass(),
 		// 消息数超过 10 条时触发摘要，保留最近 5 条
 		passes.NewSummarizerPass(llmServiceURL, "deepseek-chat", 10, 5),
 		passes.NewSystemPromptPass(),
@@ -33,7 +34,7 @@ func NewEngine(h *history.Service, llmServiceURL string) *Engine {
 }
 
 // BuildPayload 驱动管线执行，并负责将管线生成的内部 Trace 信息归一化为业务层可理解的格式。
-func (e *Engine) BuildPayload(ctx stdctx.Context, id string, query string, modelID string) ([]domain.Message, error) {
+func (e *Engine) BuildPayload(ctx stdctx.Context, id string, query string, modelID string, ragEnabled bool, ragEmbeddingModel string) ([]domain.Message, error) {
 	// 1. 初始化管线运行时的黑板数据 (ContextData)
 	data := &pipeline.ContextData{
 		SessionID: id,
@@ -45,6 +46,8 @@ func (e *Engine) BuildPayload(ctx stdctx.Context, id string, query string, model
 	// 注入初始上下文元数据
 	data.Meta["query"] = query
 	data.Meta["model_id"] = modelID
+	data.Meta["rag_enabled"] = ragEnabled
+	data.Meta["rag_embedding_model"] = ragEmbeddingModel
 
 	// 2. 启动 Pipeline 逻辑处理
 	if err := e.pipeline.Execute(ctx, data); err != nil {
@@ -146,7 +149,7 @@ func (s *Service) AppendMessage(ctx stdctx.Context, id string, msg domain.Messag
 
 // GetOptimizedContext 是核心业务入口。
 // 它负责记录用户请求并驱动 Engine 生成优化后的模型上下文。
-func (s *Service) GetOptimizedContext(ctx stdctx.Context, id, query string, modelID string) ([]domain.Message, error) {
+func (s *Service) GetOptimizedContext(ctx stdctx.Context, id, query string, modelID string, ragEnabled bool, ragEmbeddingModel string) ([]domain.Message, error) {
 	// 1. 自动确保 Session 环境存在
 	s.historySvc.GetOrCreateSession(ctx, id, "auto")
 
@@ -155,7 +158,7 @@ func (s *Service) GetOptimizedContext(ctx stdctx.Context, id, query string, mode
 	s.historySvc.Append(ctx, id, userMsg)
 
 	// 3. 调用核心引擎通过 Pipeline 构建优化后的消息 Payload
-	payload, err := s.engine.BuildPayload(ctx, id, query, modelID)
+	payload, err := s.engine.BuildPayload(ctx, id, query, modelID, ragEnabled, ragEmbeddingModel)
 
 	// 4. 将处理后的元数据（如 Token 统计）同步更新到持久化库的消息 Meta 中
 	if err == nil && len(payload) > 0 {

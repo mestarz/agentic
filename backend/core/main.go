@@ -78,6 +78,7 @@ func main() {
 	mux.HandleFunc("/api/admin/sessions/", admin.ServeSessions)
 	mux.HandleFunc("/api/admin/testcases", admin.ServeTestCases)
 	mux.HandleFunc("/api/admin/testcases/", admin.ServeTestCases)
+	mux.HandleFunc("/api/admin/status", admin.GetSystemStatus)
 
 	// 4. 启动服务
 	log.Printf("[CORE] Listening on 9091...")

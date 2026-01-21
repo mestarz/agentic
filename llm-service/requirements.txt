@@ -5,3 +5,4 @@ pydantic
 aiohttp
 
 tiktoken>=0.5.2
+ruff

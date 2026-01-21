@@ -1,6 +1,6 @@
-import { useState, useEffect, useCallback } from "react";
-import axios from "axios";
-import type { Session, SessionSummary } from "../types";
+import { useState, useEffect, useCallback } from 'react';
+import axios from 'axios';
+import type { Session, SessionSummary } from '../types';
 
 export function useSessions() {
   const [sessions, setSessions] = useState<SessionSummary[]>([]);
@@ -10,7 +10,7 @@ export function useSessions() {
 
   const fetchSessions = useCallback(async () => {
     try {
-      const res = await axios.get("/api/admin/sessions");
+      const res = await axios.get('/api/admin/sessions');
       setSessions(res.data || []);
     } catch (err) {
       console.error(err);
@@ -47,8 +47,8 @@ export function useSessions() {
   const deleteSessions = async () => {
     if (!selectedIds.length) return;
     try {
-      await axios.delete("/api/admin/sessions", { data: selectedIds });
-      if (selectedIds.includes(selectedId || "")) {
+      await axios.delete('/api/admin/sessions', { data: selectedIds });
+      if (selectedIds.includes(selectedId || '')) {
         setSelectedId(null);
         setCurrentSession(null);
       }
@@ -60,15 +60,11 @@ export function useSessions() {
   };
 
   const toggleSelect = (id: string) => {
-    setSelectedIds((prev) =>
-      prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id],
-    );
+    setSelectedIds((prev) => (prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]));
   };
 
   const toggleSelectAll = () => {
-    setSelectedIds(
-      selectedIds.length === sessions.length ? [] : sessions.map((s) => s.id),
-    );
+    setSelectedIds(selectedIds.length === sessions.length ? [] : sessions.map((s) => s.id));
   };
 
   return {

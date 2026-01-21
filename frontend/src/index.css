@@ -1,7 +1,9 @@
-@import "tailwindcss";
+@import 'tailwindcss';
 
 @layer base {
-  body, html, #root {
+  body,
+  html,
+  #root {
     height: 100%;
     margin: 0;
     padding: 0;
@@ -9,16 +11,35 @@
 }
 
 /* 修复 Markdown 样式被 Tailwind 抹除的问题 */
-.markdown-content { }
-.markdown-content h1 { @apply text-2xl font-bold mb-4 mt-2 border-b pb-1; }
-.markdown-content h2 { @apply text-xl font-bold mb-3 mt-4 border-b pb-1; }
-.markdown-content h3 { @apply text-lg font-bold mb-2 mt-3; }
-.markdown-content p { @apply mb-3 leading-relaxed whitespace-pre-wrap; }
-.markdown-content ul { @apply list-disc ml-5 mb-3; }
-.markdown-content ol { @apply list-decimal ml-5 mb-3; }
-.markdown-content li { @apply mb-1; }
-.markdown-content code:not(pre code) { @apply bg-slate-200 text-pink-600 px-1.5 py-0.5 rounded font-mono text-sm whitespace-nowrap; }
-.markdown-content pre code { @apply whitespace-pre; }
+.markdown-content {
+}
+.markdown-content h1 {
+  @apply mt-2 mb-4 border-b pb-1 text-2xl font-bold;
+}
+.markdown-content h2 {
+  @apply mt-4 mb-3 border-b pb-1 text-xl font-bold;
+}
+.markdown-content h3 {
+  @apply mt-3 mb-2 text-lg font-bold;
+}
+.markdown-content p {
+  @apply mb-3 leading-relaxed whitespace-pre-wrap;
+}
+.markdown-content ul {
+  @apply mb-3 ml-5 list-disc;
+}
+.markdown-content ol {
+  @apply mb-3 ml-5 list-decimal;
+}
+.markdown-content li {
+  @apply mb-1;
+}
+.markdown-content code:not(pre code) {
+  @apply rounded bg-slate-200 px-1.5 py-0.5 font-mono text-sm whitespace-nowrap text-pink-600;
+}
+.markdown-content pre code {
+  @apply whitespace-pre;
+}
 
 /* 终端深色滚动条 */
 .terminal-scrollbar::-webkit-scrollbar {
@@ -28,7 +49,7 @@
   @apply bg-slate-900;
 }
 .terminal-scrollbar::-webkit-scrollbar-thumb {
-  @apply bg-slate-700 rounded-full border-2 border-slate-900;
+  @apply rounded-full border-2 border-slate-900 bg-slate-700;
 }
 .terminal-scrollbar::-webkit-scrollbar-thumb:hover {
   @apply bg-slate-600;
@@ -42,7 +63,7 @@
   @apply bg-transparent;
 }
 .light-terminal-scrollbar::-webkit-scrollbar-thumb {
-  @apply bg-slate-200 rounded-full border-2 border-transparent;
+  @apply rounded-full border-2 border-transparent bg-slate-200;
 }
 .light-terminal-scrollbar::-webkit-scrollbar-thumb:hover {
   @apply bg-slate-300;

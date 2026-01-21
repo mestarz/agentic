@@ -9,27 +9,30 @@ interface MarkdownProps {
 
 export function Markdown({ content }: MarkdownProps) {
   return (
-    <ReactMarkdown 
-      remarkPlugins={[remarkGfm]} 
-      components={{ 
-        code({node, inline, className, children, ...props}: any) { 
-          const match = /language-(\w+)/.exec(className || ''); 
-          return !inline && match ? ( 
-            <SyntaxHighlighter 
-              style={vscDarkPlus as any} 
-              language={match[1]} 
-              PreTag="div" 
-              className="rounded-lg my-4" 
+    <ReactMarkdown
+      remarkPlugins={[remarkGfm]}
+      components={{
+        code({ node, inline, className, children, ...props }: any) {
+          const match = /language-(\w+)/.exec(className || '');
+          return !inline && match ? (
+            <SyntaxHighlighter
+              style={vscDarkPlus as any}
+              language={match[1]}
+              PreTag="div"
+              className="my-4 rounded-lg"
               {...props}
             >
               {String(children).replace(/\n$/, '')}
-            </SyntaxHighlighter> 
+            </SyntaxHighlighter>
           ) : (
-            <code className="bg-slate-200 text-pink-600 px-1 rounded mx-1 font-mono text-[12px]" {...props}>
+            <code
+              className="mx-1 rounded bg-slate-200 px-1 font-mono text-[12px] text-pink-600"
+              {...props}
+            >
               {children}
             </code>
-          ); 
-        } 
+          );
+        },
       }}
     >
       {content}

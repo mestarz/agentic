@@ -24,32 +24,25 @@ func cors(next http.Handler) http.Handler {
 
 func main() {
 	coreURL := "http://127.0.0.1:9091"
-	llmGatewayURL := "http://127.0.0.1:8000" // Default FastAPI port
-	cc := logic.NewCoreServiceClient(coreURL)
-	lg := logic.NewLLMGatewayClient(llmGatewayURL)
-	svc := logic.NewAgentService(cc, lg)
+	llmGatewayURL := "http://127.0.0.1:8000"
+
+	coreClient := logic.NewCoreServiceClient(coreURL)
+	llmGateway := logic.NewLLMGatewayClient(llmGatewayURL)
+	agentSvc := logic.NewAgentService(coreClient, llmGateway)
+
 	mux := http.NewServeMux()
+
 	mux.HandleFunc("/api/debug/chat", func(w http.ResponseWriter, r *http.Request) {
 		var req struct {
-			SessionID    string `json:"session_id"`
-			Query        string `json:"query"`
-			AgentModelID string `json:"agent_model_id"`
-			CoreModelID  string `json:"core_model_id"`
+			SessionID         string `json:"session_id"`
+			Query             string `json:"query"`
+			AgentModelID      string `json:"agent_model_id"`
+			CoreModelID       string `json:"core_model_id"`
+			RagEnabled        bool   `json:"rag_enabled"`
+			RagEmbeddingModel string `json:"rag_embedding_model"`
 		}
 		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 			http.Error(w, err.Error(), http.StatusBadRequest)
-			return
-		}
-
-		// Validate required fields
-		if req.AgentModelID == "" {
-			http.Error(w, "agent_model_id is required", http.StatusBadRequest)
-			return
-		}
-		if req.CoreModelID == "" {
-			// CoreModelID might be optional depending on design, but let's enforce it for now or default to AgentModelID?
-			// Let's enforce it to be explicit based on user's request for robustness.
-			http.Error(w, "core_model_id is required", http.StatusBadRequest)
 			return
 		}
 
@@ -61,22 +54,38 @@ func main() {
 		}
 
 		out := make(chan string)
-		go svc.Chat(r.Context(), req.SessionID, req.Query, req.AgentModelID, req.CoreModelID, out)
+		go agentSvc.Chat(r.Context(), req.SessionID, req.Query, req.AgentModelID, req.CoreModelID, req.RagEnabled, req.RagEmbeddingModel, out)
 		for c := range out {
 			fmt.Fprintf(w, "data: %s\n\n", c)
 			flusher.Flush()
 		}
 	})
 
-	// Proxy to LLM Gateway for model management
+	mux.HandleFunc("/api/debug/embeddings", func(w http.ResponseWriter, r *http.Request) {
+		var req struct {
+			ModelID string `json:"model_id"`
+			Input   string `json:"input"`
+		}
+		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+
+		result, err := llmGateway.GetEmbeddings(r.Context(), req.ModelID, req.Input)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(result)
+	})
+
+	// 代理到 LLM Gateway
 	mux.HandleFunc("/api/models/", func(w http.ResponseWriter, r *http.Request) {
-		// Strip /api/models and forward to /v1 (e.g., /api/models/models -> /v1/models)
 		path := strings.TrimPrefix(r.URL.Path, "/api/models")
-		req, err := http.NewRequest(r.Method, llmGatewayURL+"/v1"+path, r.Body)
-		if err != nil {
-			http.Error(w, err.Error(), http.StatusInternalServerError)
-			return
-		}
+		target := llmGatewayURL + "/v1" + path
+		req, _ := http.NewRequest(r.Method, target, r.Body)
 		for k, v := range r.Header {
 			req.Header[k] = v
 		}
@@ -92,12 +101,11 @@ func main() {
 		w.WriteHeader(resp.StatusCode)
 		io.Copy(w, resp.Body)
 	})
+
+	// 代理到 Core Admin
 	mux.HandleFunc("/api/admin/", func(w http.ResponseWriter, r *http.Request) {
-		req, err := http.NewRequest(r.Method, coreURL+r.URL.Path, r.Body)
-		if err != nil {
-			http.Error(w, err.Error(), http.StatusInternalServerError)
-			return
-		}
+		target := coreURL + r.URL.Path
+		req, _ := http.NewRequest(r.Method, target, r.Body)
 		for k, v := range r.Header {
 			req.Header[k] = v
 		}
@@ -113,5 +121,7 @@ func main() {
 		w.WriteHeader(resp.StatusCode)
 		io.Copy(w, resp.Body)
 	})
+
+	fmt.Println("[AGENT] Listening on 0.0.0.0:9090...")
 	http.ListenAndServe("0.0.0.0:9090", cors(mux))
 }

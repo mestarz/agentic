@@ -1,4 +1,14 @@
-import { Terminal, Maximize2, Minimize2, Monitor, Zap, Cpu, Cloud, Activity, Plus } from 'lucide-react';
+import {
+  Terminal,
+  Maximize2,
+  Minimize2,
+  Monitor,
+  Zap,
+  Cpu,
+  Cloud,
+  Activity,
+  Plus,
+} from 'lucide-react';
 import type { Session } from '../../types';
 import { useMemo } from 'react';
 
@@ -17,24 +27,24 @@ export function SequenceObserver({
   selectedTraceId,
   setSelectedTraceId,
   isExpanded,
-  setIsExpanded
+  setIsExpanded,
 }: SequenceObserverProps) {
   // 聚焦上下文工程的节点设计
   const participants = [
     { id: 'Frontend', label: '用户', icon: <Monitor size={18} /> },
     { id: 'Agent', label: '代理 (Agent)', icon: <Zap size={18} /> },
     { id: 'Core', label: '核心 (Context Engine)', icon: <Cpu size={18} /> },
-    { id: 'LLM', label: '模型 (LLM)', icon: <Cloud size={18} /> }
+    { id: 'LLM', label: '模型 (LLM)', icon: <Cloud size={18} /> },
   ];
 
   const posMap: Record<string, number> = {
-    'Frontend': 0,
-    'Agent': 1,
-    'Core': 2,
-    'LLM': 3,
-    'Gateway': 3,
-    'Adapter': 3,
-    'Remote Provider': 3
+    Frontend: 0,
+    Agent: 1,
+    Core: 2,
+    LLM: 3,
+    Gateway: 3,
+    Adapter: 3,
+    'Remote Provider': 3,
   };
 
   const actionMap: Record<string, string> = {
@@ -56,10 +66,10 @@ export function SequenceObserver({
     'Model Processing': '模型推理中',
     'Model Response': '接收模型响应',
     // Pipeline
-    'Truncate': '截断超长文本',
-    'Complete': 'Pass 执行完成',
+    Truncate: '截断超长文本',
+    Complete: 'Pass 执行完成',
     // LLM
-    'Dispatch': '分发模型请求',
+    Dispatch: '分发模型请求',
     'Call API': '调用模型接口',
     'Stream Response': '流式内容返回',
     'Token Counting': '计算 Token 消耗',
@@ -72,20 +82,20 @@ export function SequenceObserver({
     'Interrupt Detected': '检测到交互中断',
     'Updated Stats': '更新统计信息',
     // Common
-    'Call': '发起调用',
-    'Response': '返回响应',
-    'Search': '执行搜索',
-    'Retrieve': '检索',
-    'Process': '逻辑处理',
-    'Analyze': '分析数据',
-    'Generate': '内容生成',
-    'Invoke': '触发动作',
-    'Error': '发生错误',
-    'Success': '执行成功',
-    'Wait': '等待响应',
-    'Thinking': '深度思考中',
-    'Update': '更新状态',
-    '流式内容返回': '流式内容返回'
+    Call: '发起调用',
+    Response: '返回响应',
+    Search: '执行搜索',
+    Retrieve: '检索',
+    Process: '逻辑处理',
+    Analyze: '分析数据',
+    Generate: '内容生成',
+    Invoke: '触发动作',
+    Error: '发生错误',
+    Success: '执行成功',
+    Wait: '等待响应',
+    Thinking: '深度思考中',
+    Update: '更新状态',
+    流式内容返回: '流式内容返回',
   };
 
   const translateAction = (action: string, data?: any) => {
@@ -93,7 +103,11 @@ export function SequenceObserver({
     if (actionMap[action]) return actionMap[action];
     const prefixRules = [
       { prefix: 'Dispatch:', label: '模型分发:' },
-      { prefix: 'Call', suffix: 'API', label: (a: string) => `调用 ${a.replace('Call ', '').replace(' API', '')} 接口` }
+      {
+        prefix: 'Call',
+        suffix: 'API',
+        label: (a: string) => `调用 ${a.replace('Call ', '').replace(' API', '')} 接口`,
+      },
     ];
     for (const rule of prefixRules) {
       if (rule.prefix && action.startsWith(rule.prefix)) {
@@ -111,7 +125,7 @@ export function SequenceObserver({
   const processedTraces = useMemo(() => {
     if (!currentSession || activeTraceIndex === null) return [];
     const traces = currentSession.messages[activeTraceIndex]?.traces || [];
-    
+
     const sorted = [...traces]
       .map((t, originalIdx) => ({ ...t, originalIdx }))
       .sort((a, b) => {
@@ -131,18 +145,24 @@ export function SequenceObserver({
       if (isStreamStart) {
         streamingStart = { ...t, action: '流式内容返回' };
       } else if (isStreamEnd && streamingStart) {
-        const duration = new Date(t.timestamp).getTime() - new Date(streamingStart.timestamp).getTime();
+        const duration =
+          new Date(t.timestamp).getTime() - new Date(streamingStart.timestamp).getTime();
         // 将结束事件的数据（如 content）合并到开始事件中，供详情展示
         const mergedData = { ...streamingStart.data, ...t.data };
-        result.push({ ...streamingStart, data: mergedData, durationMs: duration, endTimestamp: t.timestamp });
+        result.push({
+          ...streamingStart,
+          data: mergedData,
+          durationMs: duration,
+          endTimestamp: t.timestamp,
+        });
         streamingStart = null;
       } else if (!streamingStart) {
         result.push(t);
       }
     });
-    
+
     if (streamingStart) {
-        result.push({ ...streamingStart, durationMs: 0, endTimestamp: streamingStart.timestamp });
+      result.push({ ...streamingStart, durationMs: 0, endTimestamp: streamingStart.timestamp });
     }
     return result;
   }, [currentSession, activeTraceIndex]);
@@ -157,75 +177,85 @@ export function SequenceObserver({
     content += '    participant Core\n';
     content += '    participant LLM\n\n';
 
-    processedTraces.forEach(t => {
-        let src = t.source;
-        let tgt = t.target;
-        
-        // Normalize mapping
-        if (['Gateway', 'Adapter', 'Remote Provider'].includes(src)) src = 'LLM';
-        if (['Gateway', 'Adapter', 'Remote Provider'].includes(tgt)) tgt = 'LLM';
-        if (src === 'Frontend') src = 'User';
-        if (tgt === 'Frontend') tgt = 'User';
+    processedTraces.forEach((t) => {
+      let src = t.source;
+      let tgt = t.target;
 
-        let label = translateAction(t.action, t.data);
-        if (t.data?.internal_component) {
-            label += ` (${t.data.internal_component})`;
-        }
-        // Cleanup label for Mermaid
-        label = label.replace(/[:;]/g, ' ');
+      // Normalize mapping
+      if (['Gateway', 'Adapter', 'Remote Provider'].includes(src)) src = 'LLM';
+      if (['Gateway', 'Adapter', 'Remote Provider'].includes(tgt)) tgt = 'LLM';
+      if (src === 'Frontend') src = 'User';
+      if (tgt === 'Frontend') tgt = 'User';
 
-        content += `    ${src}->>${tgt}: ${label}\n`;
+      let label = translateAction(t.action, t.data);
+      if (t.data?.internal_component) {
+        label += ` (${t.data.internal_component})`;
+      }
+      // Cleanup label for Mermaid
+      label = label.replace(/[:;]/g, ' ');
+
+      content += `    ${src}->>${tgt}: ${label}\n`;
     });
 
     content += '```';
 
     navigator.clipboard.writeText(content).then(() => {
-        alert('已复制 Mermaid 时序图代码到剪贴板');
+      alert('已复制 Mermaid 时序图代码到剪贴板');
     });
   };
 
   return (
-    <aside className="w-full h-full bg-white/95 backdrop-blur-sm border-l border-slate-200 flex flex-col hidden xl:flex overflow-hidden">
-      <div className="p-4 border-b border-slate-200 bg-white flex items-center justify-between shadow-sm z-10">
+    <aside className="flex hidden h-full w-full flex-col overflow-hidden border-l border-slate-200 bg-white/95 backdrop-blur-sm xl:flex">
+      <div className="z-10 flex items-center justify-between border-b border-slate-200 bg-white p-4 shadow-sm">
         <div className="flex items-center gap-2">
           <Terminal size={18} className="text-emerald-600" />
-          <span className="text-sm font-black text-slate-700 uppercase tracking-widest">系统交互观测仪 (Trace Observer)</span>
+          <span className="text-sm font-black tracking-widest text-slate-700 uppercase">
+            系统交互观测仪 (Trace Observer)
+          </span>
         </div>
-        <button 
+        <button
           onClick={() => setIsExpanded(!isExpanded)}
-          className="p-1.5 hover:bg-slate-100 rounded-lg text-slate-500 transition-colors"
+          className="rounded-lg p-1.5 text-slate-500 transition-colors hover:bg-slate-100"
         >
           {isExpanded ? <Minimize2 size={18} /> : <Maximize2 size={18} />}
         </button>
       </div>
 
-      <div className="flex-1 flex overflow-hidden bg-slate-50/30">
-        <div className="flex-1 flex flex-col overflow-hidden relative">
+      <div className="flex flex-1 overflow-hidden bg-slate-50/30">
+        <div className="relative flex flex-1 flex-col overflow-hidden">
           {/* 对象轴头部 */}
-          <div className="flex border-b border-slate-100 bg-white py-6 relative z-20">
-            {participants.map(p => (
-              <div key={p.id} className="flex-1 flex flex-col items-center gap-2">
-                <div className={`w-12 h-12 rounded-xl flex items-center justify-center shadow-md transition-transform hover:scale-105 ${p.id === 'Core' ? 'bg-emerald-600 text-white' : 'bg-white border border-slate-200 text-slate-600'}`}>
+          <div className="relative z-20 flex border-b border-slate-100 bg-white py-6">
+            {participants.map((p) => (
+              <div key={p.id} className="flex flex-1 flex-col items-center gap-2">
+                <div
+                  className={`flex h-12 w-12 items-center justify-center rounded-xl shadow-md transition-transform hover:scale-105 ${p.id === 'Core' ? 'bg-emerald-600 text-white' : 'border border-slate-200 bg-white text-slate-600'}`}
+                >
                   {p.icon}
                 </div>
-                <span className={`text-xs font-black uppercase tracking-tight text-center ${p.id === 'Core' ? 'text-emerald-600' : 'text-slate-500'}`}>{p.label}</span>
+                <span
+                  className={`text-center text-xs font-black tracking-tight uppercase ${p.id === 'Core' ? 'text-emerald-600' : 'text-slate-500'}`}
+                >
+                  {p.label}
+                </span>
               </div>
             ))}
             <div className="flex-1"></div>
           </div>
 
-          <div 
-            className="flex-1 overflow-y-auto relative custom-scrollbar p-0"
+          <div
+            className="custom-scrollbar relative flex-1 overflow-y-auto p-0"
             onContextMenu={handleContextMenu}
             title="右键点击复制 Mermaid 交互图"
           >
             {processedTraces.length > 0 ? (
-              <div className="min-h-full py-8 relative">
+              <div className="relative min-h-full py-8">
                 {/* 垂直生命线 */}
-                <div className="absolute inset-0 flex pointer-events-none">
-                  {participants.map(p => (
-                    <div key={p.id} className="flex-1 flex justify-center">
-                      <div className={`w-[1px] h-full border-l border-dashed ${p.id === 'Core' ? 'border-emerald-200' : 'border-slate-200'}`}></div>
+                <div className="pointer-events-none absolute inset-0 flex">
+                  {participants.map((p) => (
+                    <div key={p.id} className="flex flex-1 justify-center">
+                      <div
+                        className={`h-full w-[1px] border-l border-dashed ${p.id === 'Core' ? 'border-emerald-200' : 'border-slate-200'}`}
+                      ></div>
                     </div>
                   ))}
                   <div className="flex-1"></div>
@@ -238,60 +268,97 @@ export function SequenceObserver({
                     const to = posMap[t.target] ?? 0;
                     const isSelf = from === to;
                     const stepWidth = 20;
-                    
+
                     const fromX = from * stepWidth + 10;
                     const toX = to * stepWidth + 10;
-                    
+
                     const left = isSelf ? fromX : Math.min(fromX, toX);
                     const width = isSelf ? 8 : Math.abs(fromX - toX);
                     const isRight = to >= from;
 
                     // 计算逻辑：如果上一步有结束时间（如合并后的流式），则相对于结束时间计算
-                    const prevRefTime = idx > 0 ? (arr[idx-1].endTimestamp || arr[idx-1].timestamp) : t.timestamp;
-                    const durationMs = t.durationMs !== undefined ? t.durationMs : 
-                      (idx > 0 ? Math.max(0, new Date(t.timestamp).getTime() - new Date(prevRefTime).getTime()) : 0);
-                    const durationStr = durationMs > 1000 ? `+${(durationMs/1000).toFixed(2)}s` : `+${durationMs}ms`;
+                    const prevRefTime =
+                      idx > 0 ? arr[idx - 1].endTimestamp || arr[idx - 1].timestamp : t.timestamp;
+                    const durationMs =
+                      t.durationMs !== undefined
+                        ? t.durationMs
+                        : idx > 0
+                          ? Math.max(
+                              0,
+                              new Date(t.timestamp).getTime() - new Date(prevRefTime).getTime(),
+                            )
+                          : 0;
+                    const durationStr =
+                      durationMs > 1000
+                        ? `+${(durationMs / 1000).toFixed(2)}s`
+                        : `+${durationMs}ms`;
 
                     return (
-                      <div key={idx} className="relative h-20 w-full group transition-all">
+                      <div key={idx} className="group relative h-20 w-full transition-all">
                         {[from, to].map((pIdx, i) => (
-                          <div 
+                          <div
                             key={i}
-                            className={`absolute top-0 bottom-0 w-3 -translate-x-1/2 shadow-sm z-10 
-                              ${pIdx === 2 ? 'bg-emerald-500/30 border-x border-emerald-500/40' : 'bg-slate-200 border-x border-slate-300'}
-                              ${selectedTraceId === idx ? 'ring-2 ring-indigo-400/50 z-20' : ''}
-                            `}
+                            className={`absolute top-0 bottom-0 z-10 w-3 -translate-x-1/2 shadow-sm ${pIdx === 2 ? 'border-x border-emerald-500/40 bg-emerald-500/30' : 'border-x border-slate-300 bg-slate-200'} ${selectedTraceId === idx ? 'z-20 ring-2 ring-indigo-400/50' : ''} `}
                             style={{ left: `${pIdx * stepWidth + 10}%` }}
                           />
                         ))}
 
-                        <div 
-                          onClick={() => { setSelectedTraceId(idx); setIsExpanded(true); }}
-                          className="absolute inset-0 cursor-pointer z-30"
+                        <div
+                          onClick={() => {
+                            setSelectedTraceId(idx);
+                            setIsExpanded(true);
+                          }}
+                          className="absolute inset-0 z-30 cursor-pointer"
                         >
-                          <div 
+                          <div
                             className="absolute top-1/2 -translate-y-1/2 transition-all"
                             style={{ left: `${left}%`, width: `${width}%` }}
                           >
-                            <div className={`absolute -top-9 left-0 right-0 text-center transition-all flex flex-col items-center justify-center gap-1 ${selectedTraceId === idx ? 'scale-110' : 'group-hover:scale-105'}`}>
-                              <div className={`flex items-center gap-1 px-3 py-1 rounded-full border shadow-lg bg-white z-40 ${selectedTraceId === idx ? 'border-indigo-500 ring-2 ring-indigo-100' : 'border-slate-200 group-hover:border-slate-400'}`}>
-                                <span className="text-[10px] font-black text-slate-400 mr-1 opacity-50">#{idx + 1}</span>
-                                <span className={`text-xs font-bold whitespace-nowrap ${t.source === 'Core' || t.target === 'Core' ? 'text-emerald-700' : 'text-slate-700'}`}>
-                                  {t.data?.is_pass && <span className="mr-1.5 px-1 py-0.5 bg-amber-100 text-amber-700 text-[8px] font-black rounded border border-amber-200 uppercase tracking-tighter">Pass</span>}
+                            <div
+                              className={`absolute -top-9 right-0 left-0 flex flex-col items-center justify-center gap-1 text-center transition-all ${selectedTraceId === idx ? 'scale-110' : 'group-hover:scale-105'}`}
+                            >
+                              <div
+                                className={`z-40 flex items-center gap-1 rounded-full border bg-white px-3 py-1 shadow-lg ${selectedTraceId === idx ? 'border-indigo-500 ring-2 ring-indigo-100' : 'border-slate-200 group-hover:border-slate-400'}`}
+                              >
+                                <span className="mr-1 text-[10px] font-black text-slate-400 opacity-50">
+                                  #{idx + 1}
+                                </span>
+                                <span
+                                  className={`text-xs font-bold whitespace-nowrap ${t.source === 'Core' || t.target === 'Core' ? 'text-emerald-700' : 'text-slate-700'}`}
+                                >
+                                  {t.data?.is_pass && (
+                                    <span className="mr-1.5 rounded border border-amber-200 bg-amber-100 px-1 py-0.5 text-[8px] font-black tracking-tighter text-amber-700 uppercase">
+                                      Pass
+                                    </span>
+                                  )}
                                   {translateAction(t.action, t.data)}
                                 </span>
-                                <span className="text-[10px] font-mono font-medium text-amber-500 ml-1">{durationStr}</span>
+                                <span className="ml-1 font-mono text-[10px] font-medium text-amber-500">
+                                  {durationStr}
+                                </span>
                               </div>
                             </div>
-                            
+
                             {isSelf ? (
-                              <div className={`absolute top-0 left-0 w-16 h-12 border-2 ${from === 2 ? 'border-emerald-400' : 'border-indigo-300'} border-l-0 rounded-r-2xl transition-all ${selectedTraceId === idx ? 'opacity-100' : 'opacity-60'}`}>
-                                 <div className={`absolute bottom-0 right-0 translate-x-1/2 translate-y-1/2 border-l-[8px] border-l-inherit border-y-[6px] border-y-transparent`} style={{ borderLeftColor: 'inherit' }}></div>
+                              <div
+                                className={`absolute top-0 left-0 h-12 w-16 border-2 ${from === 2 ? 'border-emerald-400' : 'border-indigo-300'} rounded-r-2xl border-l-0 transition-all ${selectedTraceId === idx ? 'opacity-100' : 'opacity-60'}`}
+                              >
+                                <div
+                                  className={`absolute right-0 bottom-0 translate-x-1/2 translate-y-1/2 border-y-[6px] border-l-[8px] border-y-transparent border-l-inherit`}
+                                  style={{ borderLeftColor: 'inherit' }}
+                                ></div>
                               </div>
                             ) : (
-                              <div className={`absolute top-0 left-0 right-0 h-[2.5px] transition-all ${selectedTraceId === idx ? 'bg-indigo-500' : 'bg-slate-400 group-hover:bg-indigo-500'}`}>
-                                <div className={`absolute top-1/2 -translate-y-1/2 ${isRight ? 'right-0 border-l-[8px] border-l-inherit' : 'left-0 border-r-[8px] border-r-inherit'} border-y-[5px] border-y-transparent`} 
-                                     style={{ borderLeftColor: 'inherit', borderRightColor: 'inherit' }}></div>
+                              <div
+                                className={`absolute top-0 right-0 left-0 h-[2.5px] transition-all ${selectedTraceId === idx ? 'bg-indigo-500' : 'bg-slate-400 group-hover:bg-indigo-500'}`}
+                              >
+                                <div
+                                  className={`absolute top-1/2 -translate-y-1/2 ${isRight ? 'right-0 border-l-[8px] border-l-inherit' : 'left-0 border-r-[8px] border-r-inherit'} border-y-[5px] border-y-transparent`}
+                                  style={{
+                                    borderLeftColor: 'inherit',
+                                    borderRightColor: 'inherit',
+                                  }}
+                                ></div>
                               </div>
                             )}
                           </div>
@@ -302,145 +369,207 @@ export function SequenceObserver({
                 </div>
               </div>
             ) : (
-              <div className="h-full flex flex-col items-center justify-center text-slate-300 gap-4 opacity-50">
+              <div className="flex h-full flex-col items-center justify-center gap-4 text-slate-300 opacity-50">
                 <Activity size={40} className="text-slate-200" />
-                <div className="text-[10px] font-black uppercase tracking-widest">等待系统交互数据...</div>
+                <div className="text-[10px] font-black tracking-widest uppercase">
+                  等待系统交互数据...
+                </div>
               </div>
             )}
           </div>
 
-          <div className="h-8 bg-slate-100 border-t border-slate-200 flex items-center px-4 gap-6 z-30">
+          <div className="z-30 flex h-8 items-center gap-6 border-t border-slate-200 bg-slate-100 px-4">
             <div className="flex items-center gap-2">
-                <div className="w-2.5 h-2.5 bg-emerald-500 rounded-full animate-pulse shadow-[0_0_8px_rgba(16,185,129,0.5)]"></div>
-                <span className="text-xs font-black text-slate-500 uppercase tracking-tighter">核心引擎运行中</span>
+              <div className="h-2.5 w-2.5 animate-pulse rounded-full bg-emerald-500 shadow-[0_0_8px_rgba(16,185,129,0.5)]"></div>
+              <span className="text-xs font-black tracking-tighter text-slate-500 uppercase">
+                核心引擎运行中
+              </span>
             </div>
-            <div className="flex items-center gap-2 ml-auto">
-                <span className="text-xs font-black text-slate-400 uppercase">总耗时:</span> 
-                <span className="text-sm font-mono font-bold text-amber-600">
-                  {processedTraces.length ? 
-                  ((new Date(processedTraces[processedTraces.length - 1].timestamp).getTime() - new Date(processedTraces[0].timestamp).getTime()) / 1000).toFixed(2) : 0}秒
-                </span>
+            <div className="ml-auto flex items-center gap-2">
+              <span className="text-xs font-black text-slate-400 uppercase">总耗时:</span>
+              <span className="font-mono text-sm font-bold text-amber-600">
+                {processedTraces.length
+                  ? (
+                      (new Date(processedTraces[processedTraces.length - 1].timestamp).getTime() -
+                        new Date(processedTraces[0].timestamp).getTime()) /
+                      1000
+                    ).toFixed(2)
+                  : 0}
+                秒
+              </span>
             </div>
           </div>
         </div>
 
         {isExpanded && selectedTraceId !== null && processedTraces[selectedTraceId] && (
-          <div className="w-[450px] bg-white border-l border-slate-200 flex flex-col shadow-[-10px_0_40px_rgba(0,0,0,0.08)] z-40 transition-all">
-            <div className="p-4 border-b border-slate-100 bg-slate-50 flex items-center justify-between">
+          <div className="z-40 flex w-[450px] flex-col border-l border-slate-200 bg-white shadow-[-10px_0_40px_rgba(0,0,0,0.08)] transition-all">
+            <div className="flex items-center justify-between border-b border-slate-100 bg-slate-50 p-4">
               <div className="flex items-center gap-2">
                 <Activity size={16} className="text-emerald-600" />
-                <span className="text-xs font-black text-slate-700 uppercase tracking-widest">链路追踪元数据 (Trace Metadata)</span>
+                <span className="text-xs font-black tracking-widest text-slate-700 uppercase">
+                  链路追踪元数据 (Trace Metadata)
+                </span>
               </div>
-              <button onClick={() => setSelectedTraceId(null)} className="p-1 hover:bg-slate-200 rounded-full text-slate-400 hover:text-slate-600 transition-colors">
+              <button
+                onClick={() => setSelectedTraceId(null)}
+                className="rounded-full p-1 text-slate-400 transition-colors hover:bg-slate-200 hover:text-slate-600"
+              >
                 <Plus size={18} className="rotate-45" />
               </button>
             </div>
-            <div className="flex-1 overflow-y-auto p-6 space-y-8 custom-scrollbar">
+            <div className="custom-scrollbar flex-1 space-y-8 overflow-y-auto p-6">
               {(() => {
                 const currentTrace = processedTraces[selectedTraceId];
                 return (
                   <div className="space-y-8">
                     <div className="flex flex-col gap-4">
-                        <div className="flex items-center gap-3">
-                           <div className={`w-8 h-8 rounded-lg flex items-center justify-center font-black text-sm shadow-sm ${currentTrace.data?.is_pass ? 'bg-amber-500 text-white' : 'bg-emerald-600 text-white'}`}>
-                             {currentTrace.data?.is_pass ? 'P' : `#${selectedTraceId + 1}`}
-                           </div>
-                           <div className="flex flex-col">
-                             <div className="flex items-center gap-2">
-                               <h3 className="text-lg font-bold text-slate-800 tracking-tight">{translateAction(currentTrace.action, currentTrace.data)}</h3>
-                               {currentTrace.data?.is_pass && (
-                                 <span className="px-1.5 py-0.5 bg-amber-100 text-amber-700 text-[9px] font-black rounded-full border border-amber-200 uppercase">Pipeline Pass</span>
-                               )}
-                             </div>
-                           </div>
+                      <div className="flex items-center gap-3">
+                        <div
+                          className={`flex h-8 w-8 items-center justify-center rounded-lg text-sm font-black shadow-sm ${currentTrace.data?.is_pass ? 'bg-amber-500 text-white' : 'bg-emerald-600 text-white'}`}
+                        >
+                          {currentTrace.data?.is_pass ? 'P' : `#${selectedTraceId + 1}`}
                         </div>
-                        <div className="flex items-center gap-4 bg-slate-50 p-3 rounded-xl border border-slate-100">
-                           <div className="flex-1">
-                               <div className="text-[10px] font-black text-slate-400 uppercase mb-1">起始节点 (Source)</div>
-                               <div className="text-sm font-bold text-slate-700">{currentTrace.source}</div>
-                           </div>
-                           <div className="text-slate-300">➔</div>
-                           <div className="flex-1 text-right">
-                               <div className="text-[10px] font-black text-slate-400 uppercase mb-1">目标节点 (Target)</div>
-                               <div className="text-sm font-bold text-slate-700">{currentTrace.target}</div>
-                           </div>
-                        </div>
-
-                        {/* Pipeline 内部组件展示 */}
-                        {currentTrace.data?.internal_component && (
-                            <div className="bg-amber-50/50 border border-amber-100 p-4 rounded-xl flex items-center justify-between">
-                               <div>
-                                 <div className="text-[10px] font-black text-amber-400 uppercase mb-1">{currentTrace.data?.is_pass ? '管线逻辑 (Pass Logic)' : '执行组件 (Component)'}</div>
-                                 <div className="text-sm font-bold text-amber-700 font-mono">
-                                   {currentTrace.data?.is_pass ? currentTrace.data.pass_name : currentTrace.data.internal_component}
-                                 </div>
-                               </div>
-                               {currentTrace.data?.is_pass ? <Activity size={24} className="text-amber-400" /> : <Cpu size={24} className="text-amber-300" />}
-                            </div>
-                        )}
-
-                        {/* 新增：目标接口/模型展示 */}
-                        {(() => {
-                          let interfaceName = '';
-                          if (currentTrace.action.startsWith('Dispatch:')) {
-                            interfaceName = currentTrace.action.split(':')[1]?.trim();
-                          } else if (currentTrace.action.includes('API')) {
-                            interfaceName = currentTrace.action.replace('Call ', '').replace(' API', '');
-                          } else if (currentTrace.data?.model) {
-                            interfaceName = currentTrace.data.model;
-                          }
-
-                          if (!interfaceName) return null;
-
-                          return (
-                            <div className="bg-indigo-50/50 border border-indigo-100 p-4 rounded-xl flex items-center justify-between">
-                               <div>
-                                 <div className="text-[10px] font-black text-indigo-400 uppercase mb-1">调用的目标接口/模型</div>
-                                 <div className="text-base font-black text-indigo-700">{interfaceName}</div>
-                               </div>
-                               <Zap size={24} className="text-indigo-300 animate-pulse" />
-                            </div>
-                          );
-                        })()}
-
-                        {/* 新增：服务路径 (Endpoint) 展示 */}
-                        {currentTrace.data?.endpoint && (
-                          <div className="bg-slate-900 rounded-xl p-3 border border-slate-800 flex items-center gap-3">
-                             <div className="w-8 h-8 rounded-lg bg-slate-800 flex items-center justify-center">
-                                <Monitor size={14} className="text-emerald-500" />
-                             </div>
-                             <div className="flex-1 min-w-0">
-                                <div className="text-[10px] font-black text-slate-500 uppercase tracking-tighter">服务路径 (Endpoint)</div>
-                                <div className="text-xs font-mono text-emerald-400 truncate">{currentTrace.data.endpoint}</div>
-                             </div>
+                        <div className="flex flex-col">
+                          <div className="flex items-center gap-2">
+                            <h3 className="text-lg font-bold tracking-tight text-slate-800">
+                              {translateAction(currentTrace.action, currentTrace.data)}
+                            </h3>
+                            {currentTrace.data?.is_pass && (
+                              <span className="rounded-full border border-amber-200 bg-amber-100 px-1.5 py-0.5 text-[9px] font-black text-amber-700 uppercase">
+                                Pipeline Pass
+                              </span>
+                            )}
                           </div>
-                        )}
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-4 rounded-xl border border-slate-100 bg-slate-50 p-3">
+                        <div className="flex-1">
+                          <div className="mb-1 text-[10px] font-black text-slate-400 uppercase">
+                            起始节点 (Source)
+                          </div>
+                          <div className="text-sm font-bold text-slate-700">
+                            {currentTrace.source}
+                          </div>
+                        </div>
+                        <div className="text-slate-300">➔</div>
+                        <div className="flex-1 text-right">
+                          <div className="mb-1 text-[10px] font-black text-slate-400 uppercase">
+                            目标节点 (Target)
+                          </div>
+                          <div className="text-sm font-bold text-slate-700">
+                            {currentTrace.target}
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Pipeline 内部组件展示 */}
+                      {currentTrace.data?.internal_component && (
+                        <div className="flex items-center justify-between rounded-xl border border-amber-100 bg-amber-50/50 p-4">
+                          <div>
+                            <div className="mb-1 text-[10px] font-black text-amber-400 uppercase">
+                              {currentTrace.data?.is_pass
+                                ? '管线逻辑 (Pass Logic)'
+                                : '执行组件 (Component)'}
+                            </div>
+                            <div className="font-mono text-sm font-bold text-amber-700">
+                              {currentTrace.data?.is_pass
+                                ? currentTrace.data.pass_name
+                                : currentTrace.data.internal_component}
+                            </div>
+                          </div>
+                          {currentTrace.data?.is_pass ? (
+                            <Activity size={24} className="text-amber-400" />
+                          ) : (
+                            <Cpu size={24} className="text-amber-300" />
+                          )}
+                        </div>
+                      )}
+
+                      {/* 新增：目标接口/模型展示 */}
+                      {(() => {
+                        let interfaceName = '';
+                        if (currentTrace.action.startsWith('Dispatch:')) {
+                          interfaceName = currentTrace.action.split(':')[1]?.trim();
+                        } else if (currentTrace.action.includes('API')) {
+                          interfaceName = currentTrace.action
+                            .replace('Call ', '')
+                            .replace(' API', '');
+                        } else if (currentTrace.data?.model) {
+                          interfaceName = currentTrace.data.model;
+                        }
+
+                        if (!interfaceName) return null;
+
+                        return (
+                          <div className="flex items-center justify-between rounded-xl border border-indigo-100 bg-indigo-50/50 p-4">
+                            <div>
+                              <div className="mb-1 text-[10px] font-black text-indigo-400 uppercase">
+                                调用的目标接口/模型
+                              </div>
+                              <div className="text-base font-black text-indigo-700">
+                                {interfaceName}
+                              </div>
+                            </div>
+                            <Zap size={24} className="animate-pulse text-indigo-300" />
+                          </div>
+                        );
+                      })()}
+
+                      {/* 新增：服务路径 (Endpoint) 展示 */}
+                      {currentTrace.data?.endpoint && (
+                        <div className="flex items-center gap-3 rounded-xl border border-slate-800 bg-slate-900 p-3">
+                          <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-slate-800">
+                            <Monitor size={14} className="text-emerald-500" />
+                          </div>
+                          <div className="min-w-0 flex-1">
+                            <div className="text-[10px] font-black tracking-tighter text-slate-500 uppercase">
+                              服务路径 (Endpoint)
+                            </div>
+                            <div className="truncate font-mono text-xs text-emerald-400">
+                              {currentTrace.data.endpoint}
+                            </div>
+                          </div>
+                        </div>
+                      )}
                     </div>
 
                     {/* 新增：处理后的上下文展示 */}
                     {currentTrace.data?.messages && Array.isArray(currentTrace.data.messages) && (
                       <div className="space-y-3">
-                        <div className="text-[10px] font-black text-slate-400 uppercase tracking-wider flex items-center gap-2">
+                        <div className="flex items-center gap-2 text-[10px] font-black tracking-wider text-slate-400 uppercase">
                           <span>处理后的上下文 (Processed Context)</span>
-                          <span className="bg-slate-100 text-slate-500 px-1.5 py-0.5 rounded text-[9px] font-bold">{currentTrace.data.messages.length} 条消息</span>
+                          <span className="rounded bg-slate-100 px-1.5 py-0.5 text-[9px] font-bold text-slate-500">
+                            {currentTrace.data.messages.length} 条消息
+                          </span>
                         </div>
                         <div className="flex flex-col gap-3">
                           {currentTrace.data.messages.map((m: any, i: number) => (
-                            <div key={i} className="bg-slate-50 border border-slate-200/60 rounded-xl p-3 shadow-sm hover:shadow-md transition-shadow">
-                              <div className="flex items-center justify-between mb-2">
+                            <div
+                              key={i}
+                              className="rounded-xl border border-slate-200/60 bg-slate-50 p-3 shadow-sm transition-shadow hover:shadow-md"
+                            >
+                              <div className="mb-2 flex items-center justify-between">
                                 <div className="flex items-center gap-2">
-                                  <span className={`text-[9px] font-black uppercase px-2 py-0.5 rounded-full shadow-sm ${
-                                    m.role === 'system' ? 'bg-amber-500 text-white' :
-                                    m.role === 'user' ? 'bg-indigo-500 text-white' :
-                                    'bg-emerald-500 text-white'
-                                  }`}>
+                                  <span
+                                    className={`rounded-full px-2 py-0.5 text-[9px] font-black uppercase shadow-sm ${
+                                      m.role === 'system'
+                                        ? 'bg-amber-500 text-white'
+                                        : m.role === 'user'
+                                          ? 'bg-indigo-500 text-white'
+                                          : 'bg-emerald-500 text-white'
+                                    }`}
+                                  >
                                     {m.role}
                                   </span>
-                                  <span className="text-[10px] font-bold text-slate-400 uppercase">Message #{i + 1}</span>
+                                  <span className="text-[10px] font-bold text-slate-400 uppercase">
+                                    Message #{i + 1}
+                                  </span>
                                 </div>
-                                <span className="text-[10px] font-mono font-medium text-slate-400 bg-white px-1.5 py-0.5 rounded border border-slate-100">{(m.content || '').length} 字符</span>
+                                <span className="rounded border border-slate-100 bg-white px-1.5 py-0.5 font-mono text-[10px] font-medium text-slate-400">
+                                  {(m.content || '').length} 字符
+                                </span>
                               </div>
-                              <div className="text-xs text-slate-600 font-sans leading-relaxed whitespace-pre-wrap max-h-32 overflow-y-auto custom-scrollbar bg-white/50 p-2 rounded-lg border border-slate-100/50">
+                              <div className="custom-scrollbar max-h-32 overflow-y-auto rounded-lg border border-slate-100/50 bg-white/50 p-2 font-sans text-xs leading-relaxed whitespace-pre-wrap text-slate-600">
                                 {m.content}
                               </div>
                             </div>
@@ -450,43 +579,68 @@ export function SequenceObserver({
                     )}
 
                     {/* 新增：内部执行日志展示 (针对折叠后的 Pass) */}
-                    {currentTrace.data?.internal_logs && Array.isArray(currentTrace.data.internal_logs) && (
-                      <div className="space-y-3">
-                        <div className="text-[10px] font-black text-slate-400 uppercase tracking-wider">执行详情 (Internal Details)</div>
-                        <div className="space-y-2">
-                          {currentTrace.data.internal_logs.map((log: any, i: number) => (
-                            <div key={i} className="bg-slate-900 rounded-xl p-3 border border-slate-800">
-                               <div className="flex items-center justify-between mb-2">
-                                 <span className="text-[10px] font-black text-amber-500 uppercase">{log.internal_action}</span>
-                                 <span className="text-[9px] font-mono text-slate-500">{log.internal_component}</span>
-                               </div>
-                               <pre className="text-[10px] text-slate-400 font-mono overflow-x-auto">
-                                 {JSON.stringify(log, (k, v) => (['internal_action', 'internal_component'].includes(k) ? undefined : v), 2)}
-                               </pre>
-                            </div>
-                          ))}
+                    {currentTrace.data?.internal_logs &&
+                      Array.isArray(currentTrace.data.internal_logs) && (
+                        <div className="space-y-3">
+                          <div className="text-[10px] font-black tracking-wider text-slate-400 uppercase">
+                            执行详情 (Internal Details)
+                          </div>
+                          <div className="space-y-2">
+                            {currentTrace.data.internal_logs.map((log: any, i: number) => (
+                              <div
+                                key={i}
+                                className="rounded-xl border border-slate-800 bg-slate-900 p-3"
+                              >
+                                <div className="mb-2 flex items-center justify-between">
+                                  <span className="text-[10px] font-black text-amber-500 uppercase">
+                                    {log.internal_action}
+                                  </span>
+                                  <span className="font-mono text-[9px] text-slate-500">
+                                    {log.internal_component}
+                                  </span>
+                                </div>
+                                <pre className="overflow-x-auto font-mono text-[10px] text-slate-400">
+                                  {JSON.stringify(
+                                    log,
+                                    (k, v) =>
+                                      ['internal_action', 'internal_component'].includes(k)
+                                        ? undefined
+                                        : v,
+                                    2,
+                                  )}
+                                </pre>
+                              </div>
+                            ))}
+                          </div>
                         </div>
-                      </div>
-                    )}
+                      )}
 
                     <div className="space-y-3">
                       <div className="flex items-center justify-between">
-                        <div className="text-[10px] font-black text-slate-400 uppercase tracking-wider">原始数据载荷 (Raw Data Payload)</div>
-                        <div className="text-[10px] font-mono text-slate-400">{new Date(currentTrace.timestamp).toLocaleTimeString()}</div>
+                        <div className="text-[10px] font-black tracking-wider text-slate-400 uppercase">
+                          原始数据载荷 (Raw Data Payload)
+                        </div>
+                        <div className="font-mono text-[10px] text-slate-400">
+                          {new Date(currentTrace.timestamp).toLocaleTimeString()}
+                        </div>
                       </div>
-                      <div className="bg-slate-900 rounded-2xl p-5 shadow-2xl relative group">
-                        <div className="absolute top-4 right-4 text-[10px] font-mono text-slate-600 uppercase">JSON 数据格式</div>
-                        <pre className="text-xs text-emerald-400 font-mono whitespace-pre-wrap break-all leading-relaxed custom-scrollbar max-h-[500px] overflow-y-auto">
+                      <div className="group relative rounded-2xl bg-slate-900 p-5 shadow-2xl">
+                        <div className="absolute top-4 right-4 font-mono text-[10px] text-slate-600 uppercase">
+                          JSON 数据格式
+                        </div>
+                        <pre className="custom-scrollbar max-h-[500px] overflow-y-auto font-mono text-xs leading-relaxed break-all whitespace-pre-wrap text-emerald-400">
                           {JSON.stringify(currentTrace.data, null, 2)}
                         </pre>
                       </div>
                     </div>
 
-                    <div className="pt-6 border-t border-slate-100 flex justify-between items-center opacity-70">
-                        <div className="flex items-center gap-2">
-                           <Zap size={14} className="text-amber-500" />
-                           <span className="text-xs font-medium text-slate-500">已应用自动链路压缩策略</span>
-                        </div>
+                    <div className="flex items-center justify-between border-t border-slate-100 pt-6 opacity-70">
+                      <div className="flex items-center gap-2">
+                        <Zap size={14} className="text-amber-500" />
+                        <span className="text-xs font-medium text-slate-500">
+                          已应用自动链路压缩策略
+                        </span>
+                      </div>
                     </div>
                   </div>
                 );

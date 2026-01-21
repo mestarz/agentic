@@ -14,56 +14,68 @@ import (
 )
 
 type CoreServiceClient struct {
-	url    string
-	client *http.Client
+	baseURL    string
+	httpClient *http.Client
 }
 
-func NewCoreServiceClient(u string) *CoreServiceClient {
-	return &CoreServiceClient{url: u, client: &http.Client{Timeout: 30 * time.Second}}
+func NewCoreServiceClient(url string) *CoreServiceClient {
+	return &CoreServiceClient{
+		baseURL:    url,
+		httpClient: &http.Client{Timeout: 30 * time.Second},
+	}
 }
 
-func (c *CoreServiceClient) GetOptimizedContext(ctx context.Context, id, query string, modelID string) ([]domain.Message, error) {
-	data, err := json.Marshal(map[string]interface{}{"session_id": id, "query": query, "model_id": modelID})
+func (c *CoreServiceClient) GetOptimizedContext(ctx context.Context, sessionID, query, modelID string, ragEnabled bool, ragEmbeddingModel string) ([]domain.Message, error) {
+	requestPayload, err := json.Marshal(map[string]interface{}{
+		"session_id":          sessionID,
+		"query":               query,
+		"model_id":            modelID,
+		"rag_enabled":         ragEnabled,
+		"rag_embedding_model": ragEmbeddingModel,
+	})
 	if err != nil {
 		return nil, err
 	}
 
-	resp, err := c.client.Post(c.url+"/api/v1/context", "application/json", bytes.NewBuffer(data))
+	resp, err := c.httpClient.Post(c.baseURL+"/api/v1/context", "application/json", bytes.NewBuffer(requestPayload))
 	if err != nil {
 		return nil, err
 	}
 	defer resp.Body.Close()
 
-	var res struct {
+	var result struct {
 		Messages []domain.Message `json:"messages"`
 	}
-	if err := json.NewDecoder(resp.Body).Decode(&res); err != nil {
+	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
 		return nil, err
 	}
-	return res.Messages, nil
+	return result.Messages, nil
 }
 
-func (c *CoreServiceClient) Append(ctx context.Context, id string, msg domain.Message) map[string]interface{} {
-	data, _ := json.Marshal(map[string]interface{}{"session_id": id, "message": msg})
+func (c *CoreServiceClient) AppendAssistantMessage(ctx context.Context, sessionID string, msg domain.Message) map[string]interface{} {
+	requestPayload, _ := json.Marshal(map[string]interface{}{
+		"session_id": sessionID,
+		"message":    msg,
+	})
 
-	resp, err := c.client.Post(c.url+"/api/v1/messages", "application/json", bytes.NewBuffer(data))
+	resp, err := c.httpClient.Post(c.baseURL+"/api/v1/messages", "application/json", bytes.NewBuffer(requestPayload))
 	if err != nil {
 		return nil
 	}
 	defer resp.Body.Close()
 
-	var meta map[string]interface{}
-	json.NewDecoder(resp.Body).Decode(&meta)
-	return meta
+	var responseMeta map[string]interface{}
+	json.NewDecoder(resp.Body).Decode(&responseMeta)
+	return responseMeta
 }
 
 type LLMGatewayClient struct {
-	url    string
-	client *http.Client
+	gatewayURL string
+	httpClient *http.Client
 }
 
-func NewLLMGatewayClient(u string) *LLMGatewayClient {
-	return &LLMGatewayClient{url: u, client: &http.Client{}}
+func NewLLMGatewayClient(url string) *LLMGatewayClient {
+	return &LLMGatewayClient{gatewayURL: url, httpClient: &http.Client{}}
 }
 
 type GatewayChunk struct {
@@ -78,13 +90,13 @@ func (l *LLMGatewayClient) ChatStream(ctx context.Context, modelID string, msgs 
 		"stream":   true,
 	})
 
-	req, err := http.NewRequestWithContext(ctx, "POST", l.url+"/v1/chat/completions", bytes.NewBuffer(payload))
+	req, err := http.NewRequestWithContext(ctx, "POST", l.gatewayURL+"/v1/chat/completions", bytes.NewBuffer(payload))
 	if err != nil {
 		return err
 	}
 	req.Header.Set("Content-Type", "application/json")
 
-	resp, err := l.client.Do(req)
+	resp, err := l.httpClient.Do(req)
 	if err != nil {
 		return err
 	}
@@ -136,13 +148,41 @@ func (l *LLMGatewayClient) ChatStream(ctx context.Context, modelID string, msgs 
 	return nil
 }
 
+func (l *LLMGatewayClient) GetEmbeddings(ctx context.Context, modelID string, input string) (map[string]interface{}, error) {
+	payload, _ := json.Marshal(map[string]interface{}{
+		"model": modelID,
+		"input": input,
+	})
+
+	req, err := http.NewRequestWithContext(ctx, "POST", l.gatewayURL+"/v1/embeddings", bytes.NewBuffer(payload))
+	if err != nil {
+		return nil, err
+	}
+	req.Header.Set("Content-Type", "application/json")
+
+	resp, err := l.httpClient.Do(req)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		body, _ := io.ReadAll(resp.Body)
+		return nil, fmt.Errorf("llm gateway error %d: %s", resp.StatusCode, string(body))
+	}
+
+	var result map[string]interface{}
+	json.NewDecoder(resp.Body).Decode(&result)
+	return result, nil
+}
+
 type AgentService struct {
-	coreSvc    *CoreServiceClient
+	coreClient *CoreServiceClient
 	llmGateway *LLMGatewayClient
 }
 
 func NewAgentService(cc *CoreServiceClient, lg *LLMGatewayClient) *AgentService {
-	return &AgentService{coreSvc: cc, llmGateway: lg}
+	return &AgentService{coreClient: cc, llmGateway: lg}
 }
 
 type SSEResponse struct {
@@ -152,33 +192,32 @@ type SSEResponse struct {
 	Trace   *domain.TraceEvent     `json:"trace,omitempty"`
 }
 
-func (s *AgentService) Chat(ctx context.Context, id, query string, agentModelID, coreModelID string, out chan<- string) {
+func (s *AgentService) Chat(ctx context.Context, sessionID, query, agentModelID, coreModelID string, ragEnabled bool, ragEmbeddingModel string, out chan<- string) {
 	var collectedTraces []domain.TraceEvent
 
-	send := func(resp SSEResponse) {
-		// 检查 context 是否已结束，避免向已关闭的 channel 发送数据导致 panic
+	sendEvent := func(response SSEResponse) {
 		select {
 		case <-ctx.Done():
 			return
 		default:
 		}
 
-		if resp.Type == "trace" && resp.Trace != nil {
-			if resp.Trace.Timestamp.IsZero() {
-				resp.Trace.Timestamp = time.Now()
+		if response.Type == "trace" && response.Trace != nil {
+			if response.Trace.Timestamp.IsZero() {
+				response.Trace.Timestamp = time.Now()
 			}
-			collectedTraces = append(collectedTraces, *resp.Trace)
+			collectedTraces = append(collectedTraces, *response.Trace)
 		}
-		data, _ := json.Marshal(resp)
-		out <- string(data)
+		jsonBytes, _ := json.Marshal(response)
+		out <- string(jsonBytes)
 	}
 
-	trace := func(source, target, action string, data ...interface{}) {
+	emitTrace := func(source, target, action string, data ...interface{}) {
 		var d interface{}
 		if len(data) > 0 {
 			d = data[0]
 		}
-		send(SSEResponse{
+		sendEvent(SSEResponse{
 			Type: "trace",
 			Trace: &domain.TraceEvent{
 				Source: source, Target: target, Action: action, Data: d, Timestamp: time.Now(),
@@ -186,82 +225,64 @@ func (s *AgentService) Chat(ctx context.Context, id, query string, agentModelID,
 		})
 	}
 
-	// 1. 先记录起点 Trace
-	trace("Frontend", "Agent", "Receive Query", query)
-	trace("Agent", "Core", "Get Optimized Context", map[string]interface{}{
-		"query":    query,
-		"model_id": coreModelID,
-		"endpoint": "/api/v1/context",
+	emitTrace("Frontend", "Agent", "Receive Query", query)
+	emitTrace("Agent", "Core", "Get Optimized Context", map[string]interface{}{
+		"query":               query,
+		"model_id":            coreModelID,
+		"rag_enabled":         ragEnabled,
+		"rag_embedding_model": ragEmbeddingModel,
 	})
 
-	// 2. 再执行实际调用
-	payload, err := s.coreSvc.GetOptimizedContext(ctx, id, query, coreModelID)
+	optimizedMsgs, err := s.coreClient.GetOptimizedContext(ctx, sessionID, query, coreModelID, ragEnabled, ragEmbeddingModel)
 	if err != nil {
-		trace("Agent", "Frontend", "Error", err.Error())
+		emitTrace("Agent", "Frontend", "Error", err.Error())
 		close(out)
 		return
 	}
 
-	// 提取并转发 Core 内部产生的 Pipeline Traces (仅针对当前请求产生的最新消息)
-	if len(payload) > 0 {
-		lastMsg := payload[len(payload)-1]
+	if len(optimizedMsgs) > 0 {
+		lastMsg := optimizedMsgs[len(optimizedMsgs)-1]
 		for _, t := range lastMsg.Traces {
 			tCopy := t
-			send(SSEResponse{Type: "trace", Trace: &tCopy})
+			sendEvent(SSEResponse{Type: "trace", Trace: &tCopy})
+		}
+		if lastMsg.Meta != nil {
+			sendEvent(SSEResponse{Type: "meta", Meta: lastMsg.Meta})
 		}
 	}
 
-	// 辅助函数：提取纯净的消息内容用于展示
-	cleanMessages := func(msgs []domain.Message) []map[string]string {
+	// 辅助函数用于日志展示
+	summarizeMsgs := func(msgs []domain.Message) []map[string]string {
 		res := make([]map[string]string, len(msgs))
 		for i, m := range msgs {
-			res[i] = map[string]string{
-				"role":    m.Role,
-				"content": m.Content,
-			}
+			res[i] = map[string]string{"role": m.Role, "content": m.Content}
 		}
 		return res
 	}
 
-	trace("Core", "Agent", "Return Payload", map[string]interface{}{
-		"context":  cleanMessages(payload),
-		"endpoint": "/api/v1/context (Response)",
-	})
+	emitTrace("Core", "Agent", "Return Context", summarizeMsgs(optimizedMsgs))
 
-	if len(payload) > 0 && payload[len(payload)-1].Meta != nil {
-		send(SSEResponse{Type: "meta", Meta: payload[len(payload)-1].Meta})
-	}
+	gatewayChan := make(chan GatewayChunk)
+	var fullResponse strings.Builder
 
-	internal := make(chan GatewayChunk)
-	var full strings.Builder
-
-	save := func() {
-		if full.Len() > 0 {
-			finalContent := full.String()
-			trace("Agent", "Core", "Append Assistant Message", map[string]interface{}{
-				"content":  finalContent,
-				"endpoint": "/api/v1/messages",
-			})
-			meta := s.coreSvc.Append(context.Background(), id, domain.Message{
-				Role:      "assistant",
-				Content:   finalContent,
+	persistAndFinalize := func() {
+		if fullResponse.Len() > 0 {
+			content := fullResponse.String()
+			emitTrace("Agent", "Core", "Append Assistant Message")
+			finalMeta := s.coreClient.AppendAssistantMessage(context.Background(), sessionID, domain.Message{
+				Role:      domain.RoleAssistant,
+				Content:   content,
 				Timestamp: time.Now(),
 				Traces:    collectedTraces,
 			})
-			if meta != nil {
-				send(SSEResponse{Type: "meta", Meta: meta})
-				trace("Core", "Agent", "Updated Stats", map[string]interface{}{
-					"meta":     meta,
-					"endpoint": "/api/v1/messages (Response)",
-				})
+			if finalMeta != nil {
+				sendEvent(SSEResponse{Type: "meta", Meta: finalMeta})
 			}
 		}
 	}
 
-	trace("Agent", "Gateway", "Start Streaming", map[string]interface{}{
-		"model":    agentModelID,
-		"prompt":   cleanMessages(payload),
-		"endpoint": "/v1/chat/completions",
+	emitTrace("Agent", "Gateway", "Start Chat Stream", map[string]interface{}{
+		"model": agentModelID,
 	})
 
 	go func() {
@@ -269,29 +290,28 @@ func (s *AgentService) Chat(ctx context.Context, id, query string, agentModelID,
 		for {
 			select {
 			case <-ctx.Done():
-				trace("Frontend", "Agent", "Interrupt Detected")
-				save()
+				emitTrace("Agent", "System", "Context Cancelled")
+				persistAndFinalize()
 				return
-			case res, ok := <-internal:
+			case chunk, ok := <-gatewayChan:
 				if !ok {
-					save()
+					persistAndFinalize()
 					return
 				}
-				if res.Trace != nil {
-					send(SSEResponse{Type: "trace", Trace: res.Trace})
+				if chunk.Trace != nil {
+					sendEvent(SSEResponse{Type: "trace", Trace: chunk.Trace})
 				}
-				if res.Content != "" {
-					full.WriteString(res.Content)
-					send(SSEResponse{Type: "chunk", Content: res.Content})
+				if chunk.Content != "" {
+					fullResponse.WriteString(chunk.Content)
+					sendEvent(SSEResponse{Type: "chunk", Content: chunk.Content})
 				}
 			}
 		}
 	}()
 
-	err = s.llmGateway.ChatStream(ctx, agentModelID, payload, internal)
+	err = s.llmGateway.ChatStream(ctx, agentModelID, optimizedMsgs, gatewayChan)
 	if err != nil {
-		send(SSEResponse{Type: "chunk", Content: "LLM 网关错误: " + err.Error()})
+		sendEvent(SSEResponse{Type: "chunk", Content: "[Agent Error] " + err.Error()})
 	}
-
-	close(internal)
+	close(gatewayChan)
 }

@@ -12,8 +12,25 @@ export NO_PROXY="localhost,127.0.0.1,0.0.0.0"
 # 配置环境变量
 export LLM_SERVICE_URL="http://localhost:8000"
 export AGENTIC_SESSIONS_DIR="$ROOT_DIR/data/sessions"
+export QDRANT_URL="http://localhost:6333"
+export QDRANT_COLLECTION="documents"
+export RAG_EMBEDDING_MODEL="text-embedding-3-small"
 
 echo "正在启动 ContextFabric 完全隔离版 (Core + Agent + LLM Gateway)..."
+
+# 0. 启动 Qdrant 向量数据库 (Docker)
+echo "启动 Qdrant 服务..."
+docker run -d --name agentic-qdrant \
+    -p 6333:6333 -p 6334:6334 \
+    -v "$ROOT_DIR/data/qdrant:/qdrant/storage" \
+    qdrant/qdrant:latest > /dev/null 2>&1 || docker start agentic-qdrant
+
+# 等待 Qdrant 启动并创建集合
+echo "检查 Qdrant 集合..."
+sleep 2
+curl -X PUT "http://localhost:6333/collections/documents" \
+     -H "Content-Type: application/json" \
+     -d '{"vectors": {"size": 1536, "distance": "Cosine"}}' > /dev/null 2>&1
 
 # 0. 启动 LLM Gateway (Python)
 echo "启动 LLM Gateway 服务..."

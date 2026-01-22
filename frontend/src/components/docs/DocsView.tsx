@@ -1,81 +1,96 @@
-import { Code } from 'lucide-react';
+import { useState, useEffect } from 'react';
+import { BookOpen, FileText, Loader2 } from 'lucide-react';
+import { Markdown } from '../ui/Markdown';
 
 export function DocsView() {
+  const [docs, setDocs] = useState<string[]>([]);
+  const [selectedDoc, setSelectedDoc] = useState<string | null>(null);
+  const [content, setContent] = useState('');
+  const [loading, setLoading] = useState(false);
+
+  useEffect(() => {
+    fetch('/api/admin/docs')
+      .then((res) => res.json())
+      .then((data) => {
+        setDocs(data);
+        if (data.length > 0) {
+          const readme = data.find((d: string) => d.toLowerCase() === 'readme.md');
+          const initialDoc = readme || data[0];
+          setSelectedDoc(initialDoc);
+          setLoading(true); // 初始加载列表后，立即标记正在加载第一个文档内容
+        }
+      })
+      .catch((err) => console.error('Failed to load docs list', err));
+  }, []);
+
+  useEffect(() => {
+    if (!selectedDoc) return;
+    // 不再在这里同步执行 setLoading(true)，因为它应该由触发者设置
+    fetch(`/api/admin/docs?name=${selectedDoc}`)
+      .then((res) => res.text())
+      .then((text) => setContent(text))
+      .catch((err) => console.error('Failed to load doc content', err))
+      .finally(() => setLoading(false));
+  }, [selectedDoc]);
+
+  const handleSelectDoc = (doc: string) => {
+    if (doc === selectedDoc) return;
+    setSelectedDoc(doc);
+    setLoading(true); // 用户点击时手动触发加载状态
+  };
+
   return (
-    <main className="custom-scrollbar flex-1 overflow-y-auto bg-white p-12">
-      <div className="mx-auto max-w-4xl">
-        <div className="mb-8 flex items-center gap-4">
-          <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-indigo-100 text-indigo-600 shadow-sm">
-            <Code size={28} />
-          </div>
-          <div>
-            <h1 className="text-3xl font-black tracking-tight text-slate-800">API 接口文档</h1>
-            <p className="font-medium text-slate-500">ContextFabric Core v1.0.0</p>
-          </div>
+    <div className="flex h-screen w-full overflow-hidden bg-slate-50">
+      {/* Sidebar */}
+      <div className="flex w-64 shrink-0 flex-col border-r border-slate-200 bg-white">
+        <div className="flex items-center gap-2 border-b border-slate-100 p-6">
+          <BookOpen size={18} className="text-indigo-600" />
+          <h2 className="text-[10px] font-black tracking-widest text-slate-800 uppercase">
+            项目文档
+          </h2>
         </div>
 
-        <section className="mb-12 rounded-2xl border border-slate-100 bg-slate-50 p-6 text-sm leading-relaxed text-slate-600">
-          ContextFabric Core 提供无状态的上下文工程能力，负责会话管理、历史持久化以及 Token
-          优化裁剪。
-        </section>
-
-        <div className="space-y-12">
-          <div className="space-y-4">
-            <h2 className="flex items-center gap-2 text-lg font-bold text-slate-800">
-              <div className="h-1.5 w-1.5 rounded-full bg-indigo-600"></div> 上下文构建 (Build
-              Context)
-            </h2>
-            <p className="text-xs text-slate-500">
-              获取经过 Token 优化和系统指令注入后的完整对话 Payload。
-            </p>
-            <div className="overflow-x-auto rounded-2xl bg-slate-900 p-6 font-mono text-xs text-indigo-300 shadow-xl">
-              <pre>{`POST /api/v1/context\n\n请求体:\n{\n  "session_id": "string",\n  "query": "用户输入",\n  "config": { "model": "..." }\n}\n\n响应:\n{\n  "messages": [\n    { "role": "system", "content": "..." },\n    { "role": "user", "content": "...", "meta": { "tokens_total": 120 } }\n  ]\n`}</pre>
-            </div>
-          </div>
-
-          <div className="space-y-4">
-            <h2 className="flex items-center gap-2 text-lg font-bold text-slate-800">
-              <div className="h-1.5 w-1.5 rounded-full bg-indigo-600"></div> 消息追加 (Append
-              Message)
-            </h2>
-            <p className="text-xs text-slate-500">将模型生成的回复或用户消息手动存入持久化层。</p>
-            <div className="overflow-x-auto rounded-2xl bg-slate-900 p-6 font-mono text-xs text-emerald-300 shadow-xl">
-              <pre>{`POST /api/v1/messages\n\n请求体:\n{\n  "session_id": "string",\n  "message": {\n    "role": "assistant",\n    "content": "内容",\n    "timestamp": "2026-01-16T..."\n  }\n}`}</pre>
-            </div>
-          </div>
-
-          <div className="space-y-4">
-            <h2 className="flex items-center gap-2 text-lg font-bold text-slate-800">
-              <div className="h-1.5 w-1.5 rounded-full bg-red-500"></div> 会话管理 (Admin APIs)
-            </h2>
-            <div className="grid grid-cols-1 gap-4">
-              <div className="rounded-xl border border-slate-200 bg-slate-100 p-4">
-                <code className="text-xs font-bold text-indigo-600">GET /api/admin/sessions</code>
-                <p className="mt-1 text-[10px] text-slate-500">获取所有活跃会话的摘要列表。</p>
-              </div>
-              <div className="rounded-xl border border-slate-200 bg-slate-100 p-4">
-                <code className="text-xs font-bold text-indigo-600">
-                  GET /api/admin/sessions/:id
-                </code>
-                <p className="mt-1 text-[10px] text-slate-500">获取指定会话的完整历史记录。</p>
-              </div>
-              <div className="rounded-xl border border-slate-200 bg-slate-100 p-4">
-                <code className="text-xs font-bold text-red-600">
-                  DELETE /api/admin/sessions/:id
-                </code>
-                <p className="mt-1 text-[10px] text-slate-500">永久删除指定会话的文件。</p>
-              </div>
-              <div className="rounded-xl border border-slate-200 bg-slate-100 p-4">
-                <code className="text-xs font-bold text-red-600">DELETE /api/admin/sessions</code>
-                <p className="mt-1 text-[10px] text-slate-500">
-                  批量删除会话。请求体为 ID 数组:{' '}
-                  <code className="bg-white px-1">["id1", "id2"]</code>
-                </p>
-              </div>
-            </div>
-          </div>
+        <div className="flex-1 space-y-1 p-4">
+          {docs.map((doc) => (
+            <button
+              key={doc}
+              onClick={() => handleSelectDoc(doc)}
+              className={`flex w-full items-center gap-3 rounded-xl p-3 text-left transition-all ${
+                selectedDoc === doc
+                  ? 'bg-indigo-50 font-bold text-indigo-600'
+                  : 'text-slate-600 hover:bg-slate-50'
+              }`}
+            >
+              <FileText
+                size={16}
+                className={selectedDoc === doc ? 'text-indigo-600' : 'text-slate-400'}
+              />
+              <span className="truncate text-xs">{doc}</span>
+            </button>
+          ))}
         </div>
       </div>
-    </main>
+
+      {/* Main Content */}
+      <div className="flex flex-1 flex-col overflow-hidden bg-white">
+        {selectedDoc && (
+          <div className="flex items-center justify-between border-b border-slate-100 px-8 py-4">
+            <h1 className="text-lg font-black tracking-tight text-slate-800">{selectedDoc}</h1>
+          </div>
+        )}
+
+        <div className="custom-scrollbar flex-1 overflow-y-auto p-8 lg:p-12">
+          {loading ? (
+            <div className="flex h-full items-center justify-center">
+              <Loader2 size={32} className="animate-spin text-indigo-200" />
+            </div>
+          ) : (
+            <div className="prose prose-slate prose-headings:font-black prose-a:text-indigo-600 prose-pre:bg-slate-900 prose-pre:text-slate-50 max-w-4xl">
+              <Markdown content={content} />
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
   );
 }

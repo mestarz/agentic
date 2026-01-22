@@ -216,6 +216,45 @@ func (h *AdminHandler) ServeLogs(w http.ResponseWriter, r *http.Request) {
 	w.Write(content)
 }
 
+func (h *AdminHandler) ServeDocs(w http.ResponseWriter, r *http.Request) {
+	docName := r.URL.Query().Get("name")
+	docsDir := getEnv("AGENTIC_DOCS_DIR", "../../docs")
+
+	// List docs
+	if docName == "" {
+		entries, err := os.ReadDir(docsDir)
+		if err != nil {
+			http.Error(w, "Failed to list docs: "+err.Error(), http.StatusInternalServerError)
+			return
+		}
+		var files []string
+		for _, e := range entries {
+			if !e.IsDir() && strings.HasSuffix(e.Name(), ".md") {
+				files = append(files, e.Name())
+			}
+		}
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(files)
+		return
+	}
+
+	// Get doc content
+	// Security check: prevent directory traversal
+	if strings.Contains(docName, "..") || strings.Contains(docName, "/") || strings.Contains(docName, "\\") {
+		http.Error(w, "Invalid document name", http.StatusBadRequest)
+		return
+	}
+
+	content, err := os.ReadFile(docsDir + "/" + docName)
+	if err != nil {
+		http.Error(w, "Document not found", http.StatusNotFound)
+		return
+	}
+
+	w.Header().Set("Content-Type", "text/markdown; charset=utf-8")
+	w.Write(content)
+}
+
 func getEnv(key, fallback string) string {
 	if value := strings.TrimSpace(os.Getenv(key)); value != "" {
 		return value

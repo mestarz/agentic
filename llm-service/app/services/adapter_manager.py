@@ -1,11 +1,12 @@
-import os
 import importlib.util
-import json
 import inspect
+import json
+import os
 import time
-from typing import List, Dict, Any, Union
-from app.schemas import ModelAdapterConfig, ChatCompletionRequest
+from typing import Any, Dict, List, Union
+
 import httpx
+from app.schemas import ChatCompletionRequest, ModelAdapterConfig
 
 
 class AdapterManager:
@@ -67,16 +68,13 @@ class AdapterManager:
         if not model_cfg:
             raise ValueError(f"Model {model_id} not found")
 
+        # 1. 发送 (Agent -> LLM)
         yield {
             "trace": {
-                "source": "Gateway",
+                "source": "Agent",
                 "target": "Remote Provider",
                 "action": "发送模型请求",
-                "data": {
-                    "model_id": model_id,
-                    "type": model_cfg.type,
-                    "endpoint": f"adapter://{model_cfg.type}",
-                },
+                "data": {"model": model_id},
             }
         }
 
@@ -96,24 +94,42 @@ class AdapterManager:
 
                 script_config = model_cfg.config if model_cfg.config is not None else {}
 
+                first_chunk = True
                 if hasattr(module, "generate_stream"):
                     func = module.generate_stream
-                    if inspect.isasyncgenfunction(func):
-                        async for chunk in func(request.messages, script_config):
-                            yield chunk
-                    elif inspect.isgeneratorfunction(func):
-                        for chunk in func(request.messages, script_config):
-                            yield chunk
-                    else:
-                        res = func(request.messages, script_config)
-                        if inspect.isasyncgen(res):
-                            async for chunk in res:
+
+                    async def process_gen(gen):
+                        nonlocal first_chunk
+                        if inspect.isasyncgen(gen):
+                            async for chunk in gen:
                                 yield chunk
-                        elif inspect.isgenerator(res):
-                            for chunk in res:
-                                yield chunk
+                                if first_chunk:
+                                    # 2. 推理 (LLM -> LLM)
+                                    yield {
+                                        "trace": {
+                                            "source": "Remote Provider",
+                                            "target": "Remote Provider",
+                                            "action": "模型推理中",
+                                        }
+                                    }
+                                    first_chunk = False
                         else:
-                            yield str(res)
+                            for chunk in gen:
+                                yield chunk
+                                if first_chunk:
+                                    # 2. 推理 (LLM -> LLM)
+                                    yield {
+                                        "trace": {
+                                            "source": "Remote Provider",
+                                            "target": "Remote Provider",
+                                            "action": "模型推理中",
+                                        }
+                                    }
+                                    first_chunk = False
+
+                    res = func(request.messages, script_config)
+                    async for item in process_gen(res):
+                        yield item
                 else:
                     if request.is_diagnostic:
                         yield "错误: 脚本中未找到 'generate_stream' 函数。\n"
@@ -130,28 +146,17 @@ class AdapterManager:
                 yield chunk
 
                 if first_chunk:
-                    duration = (time.perf_counter() - start_time) * 1000
-                    # 2. 模型处理 Trace (LLM -> LLM) - 仅发送一次代表开始推理
+                    # 2. 推理 (LLM -> LLM)
                     yield {
                         "trace": {
                             "source": "Remote Provider",
                             "target": "Remote Provider",
                             "action": "模型推理中",
-                            "data": {"start_duration_ms": round(duration, 2)},
-                        }
-                    }
-                    # 3. 响应返回 Trace (LLM -> Agent) - 仅发送一次代表首字节返回
-                    yield {
-                        "trace": {
-                            "source": "Remote Provider",
-                            "target": "Agent",
-                            "action": "接收模型响应",
-                            "data": {"status": "streaming"},
                         }
                     }
                     first_chunk = False
 
-            # 流结束，发送一个完成 Trace
+            # 3. 返回 (LLM -> Agent)
             final_duration = (time.perf_counter() - start_time) * 1000
             yield {
                 "trace": {

@@ -252,6 +252,10 @@ func (s *AgentService) Chat(ctx context.Context, sessionID, query, agentModelID,
 	if len(optimizedMsgs) > 0 {
 		lastMsg := optimizedMsgs[len(optimizedMsgs)-1]
 		for _, t := range lastMsg.Traces {
+			// 跳过可能重复的 LLM 交互 Trace，这些将由当前的 ChatStream 过程实时产生
+			if t.Action == "发送模型请求" || t.Action == "模型推理中" || t.Action == "接收模型响应" || t.Action == "响应接收完成" {
+				continue
+			}
 			tCopy := t
 			sendEvent(SSEResponse{Type: "trace", Trace: &tCopy})
 		}
@@ -293,10 +297,6 @@ func (s *AgentService) Chat(ctx context.Context, sessionID, query, agentModelID,
 			log.Printf("[Agent] Chat Interrupted/Empty - Session: %s, Duration: %dms", sessionID, duration)
 		}
 	}
-
-	emitTrace("Agent", "Gateway", "启动流式对话", map[string]interface{}{
-		"model": agentModelID,
-	})
 
 	log.Printf("[Agent] Starting LLM Stream - Session: %s, Model: %s", sessionID, agentModelID)
 

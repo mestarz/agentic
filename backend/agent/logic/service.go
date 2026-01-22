@@ -8,6 +8,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"log"
 	"net/http"
 	"strings"
 	"time"
@@ -195,6 +196,9 @@ type SSEResponse struct {
 }
 
 func (s *AgentService) Chat(ctx context.Context, sessionID, query, agentModelID, coreModelID string, ragEnabled bool, ragEmbeddingModel string, out chan<- string) {
+	log.Printf("[Agent] Chat Request - Session: %s, Model: %s, RAG: %v", sessionID, agentModelID, ragEnabled)
+	start := time.Now()
+
 	var collectedTraces []domain.TraceEvent
 
 	sendEvent := func(response SSEResponse) {
@@ -237,10 +241,13 @@ func (s *AgentService) Chat(ctx context.Context, sessionID, query, agentModelID,
 
 	optimizedMsgs, err := s.coreClient.GetOptimizedContext(ctx, sessionID, query, coreModelID, ragEnabled, ragEmbeddingModel)
 	if err != nil {
+		log.Printf("[Agent] Core Context Error - Session: %s, Error: %v", sessionID, err)
 		emitTrace("Agent", "Frontend", "发生错误", err.Error())
 		close(out)
 		return
 	}
+
+	log.Printf("[Agent] Context Received - Session: %s, MsgCount: %d", sessionID, len(optimizedMsgs))
 
 	if len(optimizedMsgs) > 0 {
 		lastMsg := optimizedMsgs[len(optimizedMsgs)-1]
@@ -268,8 +275,10 @@ func (s *AgentService) Chat(ctx context.Context, sessionID, query, agentModelID,
 	var fullResponse strings.Builder
 
 	persistAndFinalize := func() {
+		duration := time.Since(start).Milliseconds()
 		if fullResponse.Len() > 0 {
 			content := fullResponse.String()
+			log.Printf("[Agent] Chat Completed - Session: %s, Duration: %dms, ResponseLen: %d", sessionID, duration, len(content))
 			emitTrace("Agent", "Core", "固化助手回复")
 			finalMeta := s.coreClient.AppendAssistantMessage(context.Background(), sessionID, domain.Message{
 				Role:      domain.RoleAssistant,
@@ -280,6 +289,8 @@ func (s *AgentService) Chat(ctx context.Context, sessionID, query, agentModelID,
 			if finalMeta != nil {
 				sendEvent(SSEResponse{Type: "meta", Meta: finalMeta})
 			}
+		} else {
+			log.Printf("[Agent] Chat Interrupted/Empty - Session: %s, Duration: %dms", sessionID, duration)
 		}
 	}
 
@@ -287,11 +298,14 @@ func (s *AgentService) Chat(ctx context.Context, sessionID, query, agentModelID,
 		"model": agentModelID,
 	})
 
+	log.Printf("[Agent] Starting LLM Stream - Session: %s, Model: %s", sessionID, agentModelID)
+
 	go func() {
 		defer close(out)
 		for {
 			select {
 			case <-ctx.Done():
+				log.Printf("[Agent] Context Cancelled - Session: %s", sessionID)
 				emitTrace("Agent", "System", "上下文已取消")
 				persistAndFinalize()
 				return
@@ -313,6 +327,7 @@ func (s *AgentService) Chat(ctx context.Context, sessionID, query, agentModelID,
 
 	err = s.llmGateway.ChatStream(ctx, agentModelID, optimizedMsgs, gatewayChan)
 	if err != nil {
+		log.Printf("[Agent] LLM Gateway Error - Session: %s, Error: %v", sessionID, err)
 		sendEvent(SSEResponse{Type: "chunk", Content: "[Agent Error] " + err.Error()})
 	}
 	close(gatewayChan)

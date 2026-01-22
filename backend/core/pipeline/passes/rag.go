@@ -8,6 +8,7 @@ import (
 	"context-fabric/backend/core/util"
 	"encoding/json"
 	"fmt"
+	"log"
 	"net/http"
 	"time"
 )
@@ -64,9 +65,12 @@ func (p *RAGPass) Run(ctx context.Context, data *pipeline.ContextData) error {
 		return nil
 	}
 
+	log.Printf("[RAGPass] Processing - Query: %s, Model: %s", userQuery, embeddingModel)
+
 	// 2. 获取向量
 	vector, err := p.fetchEmbedding(ctx, userQuery, embeddingModel)
 	if err != nil {
+		log.Printf("[RAGPass] Embedding Error - %v", err)
 		data.Traces = append(data.Traces, map[string]interface{}{
 			"source": "RAGPass",
 			"action": "EmbeddingError",
@@ -78,6 +82,7 @@ func (p *RAGPass) Run(ctx context.Context, data *pipeline.ContextData) error {
 	// 3. Qdrant 检索
 	results, err := p.searchQdrant(ctx, vector)
 	if err != nil {
+		log.Printf("[RAGPass] Qdrant Search Error - %v", err)
 		data.Traces = append(data.Traces, map[string]interface{}{
 			"source": "RAGPass",
 			"action": "SearchError",
@@ -86,6 +91,7 @@ func (p *RAGPass) Run(ctx context.Context, data *pipeline.ContextData) error {
 		return nil
 	}
 
+	log.Printf("[RAGPass] Found %d documents", len(results))
 	if len(results) == 0 {
 		return nil
 	}

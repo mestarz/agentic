@@ -6,6 +6,7 @@ import (
 	"context-fabric/backend/core/history"
 	"context-fabric/backend/core/pipeline"
 	"context-fabric/backend/core/pipeline/passes"
+	"log"
 	"time"
 )
 
@@ -35,6 +36,9 @@ func NewEngine(h *history.Service, llmServiceURL string) *Engine {
 
 // BuildPayload 驱动管线执行，并负责将管线生成的内部 Trace 信息归一化为业务层可理解的格式。
 func (e *Engine) BuildPayload(ctx stdctx.Context, id string, query string, modelID string, ragEnabled bool, ragEmbeddingModel string) ([]domain.Message, error) {
+	log.Printf("[Core] Pipeline Start - Session: %s, Query: %s, RAG: %v", id, query, ragEnabled)
+	start := time.Now()
+
 	// 1. 初始化管线运行时的黑板数据 (ContextData)
 	data := &pipeline.ContextData{
 		SessionID: id,
@@ -51,6 +55,7 @@ func (e *Engine) BuildPayload(ctx stdctx.Context, id string, query string, model
 
 	// 2. 启动 Pipeline 逻辑处理
 	if err := e.pipeline.Execute(ctx, data); err != nil {
+		log.Printf("[Core] Pipeline Failed - Session: %s, Error: %v", id, err)
 		return nil, err
 	}
 
@@ -115,6 +120,7 @@ func (e *Engine) BuildPayload(ctx stdctx.Context, id string, query string, model
 		}
 	}
 
+	log.Printf("[Core] Pipeline Finished - Session: %s, Duration: %dms, MsgCount: %d", id, time.Since(start).Milliseconds(), len(data.Messages))
 	return data.Messages, nil
 }
 
@@ -131,13 +137,21 @@ func NewService(h *history.Service, e *Engine) *Service {
 
 // CreateSession 初始化一个新的会话记录。
 func (s *Service) CreateSession(ctx stdctx.Context, appID string) (*domain.Session, error) {
-	return s.historySvc.GetOrCreateSession(ctx, "session-"+time.Now().Format("20060102150405.000000"), appID)
+	sess, err := s.historySvc.GetOrCreateSession(ctx, "session-"+time.Now().Format("20060102150405.000000"), appID)
+	if err == nil {
+		log.Printf("[Core] Session Created - ID: %s, AppID: %s", sess.ID, sess.AppID)
+	} else {
+		log.Printf("[Core] Session Create Failed - Error: %v", err)
+	}
+	return sess, err
 }
 
 // AppendMessage 向会话中追加一条消息（通常是模型生成的回复）。
 func (s *Service) AppendMessage(ctx stdctx.Context, id string, msg domain.Message) (map[string]interface{}, error) {
+	log.Printf("[Core] Append Message - Session: %s, Role: %s, Len: %d", id, msg.Role, len(msg.Content))
 	err := s.historySvc.Append(ctx, id, msg)
 	if err != nil {
+		log.Printf("[Core] Append Message Failed - Session: %s, Error: %v", id, err)
 		return nil, err
 	}
 
@@ -150,6 +164,8 @@ func (s *Service) AppendMessage(ctx stdctx.Context, id string, msg domain.Messag
 // GetOptimizedContext 是核心业务入口。
 // 它负责记录用户请求并驱动 Engine 生成优化后的模型上下文。
 func (s *Service) GetOptimizedContext(ctx stdctx.Context, id, query string, modelID string, ragEnabled bool, ragEmbeddingModel string) ([]domain.Message, error) {
+	log.Printf("[Core] GetContext Request - Session: %s", id)
+
 	// 1. 自动确保 Session 环境存在
 	s.historySvc.GetOrCreateSession(ctx, id, "auto")
 
@@ -163,6 +179,8 @@ func (s *Service) GetOptimizedContext(ctx stdctx.Context, id, query string, mode
 	// 4. 将处理后的元数据（如 Token 统计）同步更新到持久化库的消息 Meta 中
 	if err == nil && len(payload) > 0 {
 		s.historySvc.UpdateLastMessageMeta(ctx, id, payload[len(payload)-1].Meta)
+	} else if err != nil {
+		log.Printf("[Core] GetContext Failed - Session: %s, Error: %v", id, err)
 	}
 
 	return payload, err

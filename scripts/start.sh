@@ -5,6 +5,8 @@ LOG_DIR="$ROOT_DIR/logs"
 BIN_DIR="$ROOT_DIR/bin"
 mkdir -p "$LOG_DIR" "$BIN_DIR"
 
+export AGENTIC_LOG_DIR="$LOG_DIR"
+
 # 清理代理
 unset http_proxy https_proxy all_proxy
 export NO_PROXY="localhost,127.0.0.1,0.0.0.0"

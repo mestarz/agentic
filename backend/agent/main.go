@@ -85,6 +85,9 @@ func main() {
 	mux.HandleFunc("/api/models/", func(w http.ResponseWriter, r *http.Request) {
 		path := strings.TrimPrefix(r.URL.Path, "/api/models")
 		target := llmGatewayURL + "/v1" + path
+		if r.URL.RawQuery != "" {
+			target += "?" + r.URL.RawQuery
+		}
 		req, _ := http.NewRequest(r.Method, target, r.Body)
 		for k, v := range r.Header {
 			req.Header[k] = v
@@ -105,6 +108,9 @@ func main() {
 	// 代理到 Core Admin
 	mux.HandleFunc("/api/admin/", func(w http.ResponseWriter, r *http.Request) {
 		target := coreURL + r.URL.Path
+		if r.URL.RawQuery != "" {
+			target += "?" + r.URL.RawQuery
+		}
 		req, _ := http.NewRequest(r.Method, target, r.Body)
 		for k, v := range r.Header {
 			req.Header[k] = v

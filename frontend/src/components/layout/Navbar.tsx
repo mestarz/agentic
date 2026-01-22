@@ -1,8 +1,8 @@
-import { Server, Activity, BookOpen, Settings, Box, Beaker } from 'lucide-react';
+import { Server, Activity, BookOpen, Settings, Box, Beaker, FileText } from 'lucide-react';
 
 interface NavbarProps {
-  view: 'chat' | 'docs' | 'settings' | 'models' | 'testcases';
-  setView: (view: 'chat' | 'docs' | 'settings' | 'models' | 'testcases') => void;
+  view: 'chat' | 'docs' | 'settings' | 'models' | 'testcases' | 'logs';
+  setView: (view: 'chat' | 'docs' | 'settings' | 'models' | 'testcases' | 'logs') => void;
 }
 
 export function Navbar({ view, setView }: NavbarProps) {
@@ -35,6 +35,16 @@ export function Navbar({ view, setView }: NavbarProps) {
       >
         <Beaker size={24} />
       </button>
+      <button
+        title="系统日志"
+        onClick={() => setView('logs')}
+        className={`rounded-xl p-3 transition-all ${view === 'logs' ? 'bg-indigo-600 text-white shadow-lg' : 'text-slate-400 hover:text-slate-200'}`}
+      >
+        <FileText size={24} />
+      </button>
+
+      <div className="flex-1"></div>
+
       <button
         title="接口文档"
         onClick={() => setView('docs')}

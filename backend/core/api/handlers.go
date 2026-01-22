@@ -174,6 +174,48 @@ func (h *AdminHandler) GetSystemStatus(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
+func (h *AdminHandler) ServeLogs(w http.ResponseWriter, r *http.Request) {
+	fileType := r.URL.Query().Get("file")
+	// linesStr := r.URL.Query().Get("lines")
+
+	// 默认回退到相对路径 (假设 binary 在 backend/core 下运行)
+	logDir := getEnv("AGENTIC_LOG_DIR", "../../logs")
+	allowedFiles := map[string]string{
+		"core":     "core.log",
+		"agent":    "agent.log",
+		"llm":      "llm-gateway.log",
+		"frontend": "frontend.log",
+	}
+
+	fileName, ok := allowedFiles[fileType]
+	if !ok {
+		http.Error(w, "Invalid log file type", http.StatusBadRequest)
+		return
+	}
+
+	filePath := strings.TrimRight(logDir, "/") + "/" + fileName
+	content, err := os.ReadFile(filePath)
+	if err != nil {
+		if os.IsNotExist(err) {
+			http.Error(w, "Log file not found", http.StatusNotFound)
+			return
+		}
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	// 简单实现：只返回最后 50KB 或者最后 2000 行
+	// 这里为了简单，直接返回所有内容（假设日志会被 rotate 或者重启清空）
+	// 改进：限制返回大小，避免前端崩溃
+	maxBytes := 100 * 1024 // 100KB
+	if len(content) > maxBytes {
+		content = content[len(content)-maxBytes:]
+	}
+
+	w.Header().Set("Content-Type", "text/plain; charset=utf-8")
+	w.Write(content)
+}
+
 func getEnv(key, fallback string) string {
 	if value := strings.TrimSpace(os.Getenv(key)); value != "" {
 		return value

@@ -3,8 +3,8 @@ import os
 import sys
 
 # Qdrant 配置
-QDRANT_URL = os.Getenv("AGENTIC_QDRANT_URL", "http://localhost:6333")
-VECTOR_SIZE = int(os.getenv("AGENTIC_VECTOR_SIZE", "1536"))  # OpenAI default: 1536, BGE-M3: 1024
+QDRANT_URL = os.getenv("QDRANT_URL", "http://localhost:6333")
+VECTOR_SIZE = int(os.getenv("AGENTIC_VECTOR_SIZE", "1024"))  # OpenAI default: 1536, BGE-M3: 1024
 DISTANCE_METRIC = "Cosine"
 
 COLLECTIONS = [
@@ -14,16 +14,26 @@ COLLECTIONS = [
 ]
 
 def init_collection(name, recreate=False):
-    if recreate:
-        print(f"Deleting collection: {name}...")
-        requests.delete(f"{QDRANT_URL}/collections/{name}")
-
     print(f"Checking collection: {name}...")
     resp = requests.get(f"{QDRANT_URL}/collections/{name}")
     
-    if resp.status_code == 200:
-        print(f"Collection '{name}' already exists.")
-        return
+    exists = resp.status_code == 200
+    if exists:
+        if recreate:
+            print(f"Recreating collection: {name} (forced)...")
+        else:
+            # Check dimension
+            data = resp.json()
+            current_size = data.get("result", {}).get("config", {}).get("params", {}).get("vectors", {}).get("size")
+            if current_size != VECTOR_SIZE:
+                print(f"Collection '{name}' has wrong dimension: {current_size}, expected: {VECTOR_SIZE}. Recreating...")
+                recreate = True
+            else:
+                print(f"Collection '{name}' already exists with correct dimension.")
+                return
+
+    if recreate and exists:
+        requests.delete(f"{QDRANT_URL}/collections/{name}")
 
     print(f"Creating collection '{name}' with dimension {VECTOR_SIZE}...")
     payload = {

@@ -3,6 +3,7 @@ uvicorn
 httpx
 pydantic
 aiohttp
+requests
 
 tiktoken>=0.5.2
 ruff

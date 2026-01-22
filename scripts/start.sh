@@ -16,7 +16,8 @@ export LLM_SERVICE_URL="http://localhost:8000"
 export AGENTIC_SESSIONS_DIR="$ROOT_DIR/data/sessions"
 export QDRANT_URL="http://localhost:6333"
 export QDRANT_COLLECTION="documents"
-export RAG_EMBEDDING_MODEL="text-embedding-3-small"
+export AGENTIC_VECTOR_SIZE=1024
+export RAG_EMBEDDING_MODEL="embedding-c37c78"
 
 echo "正在启动 ContextFabric 完全隔离版 (Core + Agent + LLM Gateway)..."
 
@@ -27,13 +28,6 @@ docker run -d --name agentic-qdrant \
     -v "$ROOT_DIR/data/qdrant:/qdrant/storage" \
     qdrant/qdrant:latest > /dev/null 2>&1 || docker start agentic-qdrant
 
-# 等待 Qdrant 启动并创建集合
-echo "检查 Qdrant 集合..."
-sleep 2
-curl -X PUT "http://localhost:6333/collections/documents" \
-     -H "Content-Type: application/json" \
-     -d '{"vectors": {"size": 1536, "distance": "Cosine"}}' > /dev/null 2>&1
-
 # 0. 启动 LLM Gateway (Python)
 echo "启动 LLM Gateway 服务..."
 cd "$ROOT_DIR/llm-service"
@@ -42,6 +36,12 @@ if [ ! -d "venv" ]; then
     python3 -m venv venv
     "$ROOT_DIR/llm-service/venv/bin/pip" install -r requirements.txt
 fi
+
+# 在启动 Gateway 之前，初始化 Qdrant 集合
+echo "检查并初始化 Qdrant 集合..."
+sleep 2
+"$ROOT_DIR/llm-service/venv/bin/python3" "$ROOT_DIR/data/scripts/init_qdrant.py"
+
 nohup "$ROOT_DIR/llm-service/venv/bin/python3" -m uvicorn app.main:app --host 0.0.0.0 --port 8000 > "$LOG_DIR/llm-gateway.log" 2>&1 &
 echo $! > "$LOG_DIR/llm-gateway.pid"
 

@@ -39,7 +39,7 @@ func main() {
 			AgentModelID      string `json:"agent_model_id"`
 			CoreModelID       string `json:"core_model_id"`
 			RagEnabled        bool   `json:"rag_enabled"`
-			RagEmbeddingModel string `json:"rag_embedding_model"`
+			RagEmbeddingModel string `json:"rag_embedding_model_id"`
 		}
 		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 			http.Error(w, err.Error(), http.StatusBadRequest)

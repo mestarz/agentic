@@ -168,7 +168,18 @@ flowchart TB
 
 ---
 
-## 5. 实施路线图 (Implementation Roadmap)
+## 5. 架构原则 (Architectural Principles)
+
+为保证新架构与现有代码的低耦合，开发时须遵循以下原则：
+
+1.  **非侵入式采集**: 利用现有 `Pipeline` 的输出作为数据源，通过异步任务队列（Worker Pool）触发 `Ingestion`，不阻塞正常的对话 API 响应。
+2.  **Pass 插件化**: 所有的 `Assembler` 逻辑必须封装为标准的 `pipeline.Pass` 接口实现，通过配置动态加载 L1/L2/L3 层级。
+3.  **决策逻辑外置**: `Sanitizer` 和 `Reflector` 的具体 Prompt 和决策算法驻留在 `LLM Gateway` 中，Go Core 仅作为流程编排器。
+4.  **存储协议化**: 定义 `VectorRepo` 抽象接口，隔离 Qdrant 具体实现，便于后续在本地测试时切换为 Mock 实现或内存索引。
+
+---
+
+## 6. 实施路线图 (Implementation Roadmap)
 
 ### Phase 1: 基础设施 (Infrastructure)
 - [ ] **Qdrant**: 编写脚本创建 `mem_staging` 和 `mem_shared` 集合。

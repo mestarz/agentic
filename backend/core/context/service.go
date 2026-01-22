@@ -19,13 +19,15 @@ type Engine struct {
 
 // NewEngine 初始化引擎并配置默认的处理管线。
 // 默认顺序：1. 加载历史 -> 2. LLM 语义摘要 -> 3. 注入系统提示词 -> 4. Token 限制截断。
-func NewEngine(h *history.Service, llmServiceURL string) *Engine {
+func NewEngine(h *history.Service, llmServiceURL string, m *MemoryService) *Engine {
 	pl := pipeline.NewPipeline(
 		passes.NewHistoryLoader(h),
 		passes.NewRAGPass(),
+		passes.NewConstitutionPass(m),
 		// 消息数超过 10 条时触发摘要，保留最近 5 条
 		passes.NewSummarizerPass(llmServiceURL, "deepseek-chat", 10, 5),
 		passes.NewSystemPromptPass(),
+		passes.NewSanitizePass(m),
 		passes.NewTokenLimitPass(4000), // 默认设置 4k 上下文限制
 	)
 	return &Engine{
@@ -128,11 +130,12 @@ func (e *Engine) BuildPayload(ctx stdctx.Context, id string, query string, model
 type Service struct {
 	historySvc *history.Service
 	engine     *Engine
+	memorySvc  *MemoryService
 }
 
 // NewService 创建一个新的 Context Service。
-func NewService(h *history.Service, e *Engine) *Service {
-	return &Service{historySvc: h, engine: e}
+func NewService(h *history.Service, e *Engine, m *MemoryService) *Service {
+	return &Service{historySvc: h, engine: e, memorySvc: m}
 }
 
 // CreateSession 初始化一个新的会话记录。
@@ -153,6 +156,15 @@ func (s *Service) AppendMessage(ctx stdctx.Context, id string, msg domain.Messag
 	if err != nil {
 		log.Printf("[Core] Append Message Failed - Session: %s, Error: %v", id, err)
 		return nil, err
+	}
+
+	// 触发异步记忆录入（仅针对助手回复后的完整会话）
+	if msg.Role == domain.RoleAssistant && s.memorySvc != nil {
+		sess, err := s.historySvc.GetOrCreateSession(ctx, id, "")
+		if err == nil {
+			embModel, _ := sess.Messages[len(sess.Messages)-1].Meta["rag_embedding_model"].(string)
+			go s.memorySvc.Ingest(stdctx.Background(), id, sess.Messages, embModel)
+		}
 	}
 
 	// 临时元数据标记

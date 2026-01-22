@@ -39,3 +39,35 @@ class EmbeddingResponse(BaseModel):
     data: List[Dict[str, Any]]
     model: str
     usage: Dict[str, int]
+
+
+class SanitizeRequest(BaseModel):
+    model: str
+    messages: List[Message]
+
+
+class Fact(BaseModel):
+    content: str
+    topic: Optional[str] = "general"
+    confidence: float = 1.0
+
+
+class SanitizeResponse(BaseModel):
+    facts: List[Fact]
+
+
+class ReflectRequest(BaseModel):
+    model: str
+    new_facts: List[Fact]
+    related_memories: List[Dict[str, Any]]
+
+
+class EvolutionInstruction(BaseModel):
+    action: str  # "create", "evolve", "deprecate", "ignore"
+    fact_content: str
+    memory_id: Optional[str] = None
+    reason: Optional[str] = None
+
+
+class ReflectResponse(BaseModel):
+    instructions: List[EvolutionInstruction]

@@ -46,6 +46,22 @@ func getLLMServiceURL() string {
 	return "http://localhost:8000"
 }
 
+func getQdrantConfig() (string, string, string) {
+	url := os.Getenv("AGENTIC_QDRANT_URL")
+	if url == "" {
+		url = "http://localhost:6333"
+	}
+	staging := os.Getenv("AGENTIC_MEM_STAGING_COLL")
+	if staging == "" {
+		staging = "mem_staging"
+	}
+	shared := os.Getenv("AGENTIC_MEM_SHARED_COLL")
+	if shared == "" {
+		shared = "mem_shared"
+	}
+	return url, staging, shared
+}
+
 func main() {
 	// 1. 初始化持久化层
 	sessionDir := getSessionDir()
@@ -58,10 +74,16 @@ func main() {
 	repo, _ := persistence.NewFileHistoryRepository(sessionDir)
 	tcRepo, _ := persistence.NewFileTestCaseRepository(testcaseDir)
 
+	// 1.1 初始化向量存储层 (DEMA)
+	qURL, qStaging, qShared := getQdrantConfig()
+	vRepo := persistence.NewQdrantRepository(qURL, qStaging, qShared)
+	log.Printf("[CORE] Vector store: %s (Staging: %s, Shared: %s)", qURL, qStaging, qShared)
+
 	// 2. 初始化核心服务
+	mSvc := context.NewMemoryService(vRepo, llmServiceURL)
 	hSvc := history.NewService(repo, tcRepo)
-	cEng := context.NewEngine(hSvc, llmServiceURL)
-	cSvc := context.NewService(hSvc, cEng)
+	cEng := context.NewEngine(hSvc, llmServiceURL, mSvc)
+	cSvc := context.NewService(hSvc, cEng, mSvc)
 
 	// 3. 配置路由
 	mux := http.NewServeMux()

@@ -8,6 +8,7 @@ import (
 	"context-fabric/backend/core/util"
 	"encoding/json"
 	"fmt"
+	"io"
 	"log"
 	"net/http"
 	"time"
@@ -185,7 +186,8 @@ func (p *RAGPass) searchQdrant(ctx context.Context, vector []float32) ([]string,
 	defer func() { _ = resp.Body.Close() }()
 
 	if resp.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("qdrant search failed with status %d", resp.StatusCode)
+		body, _ := io.ReadAll(resp.Body)
+		return nil, fmt.Errorf("qdrant search failed with status %d: %s", resp.StatusCode, string(body))
 	}
 
 	var searchResponse struct {

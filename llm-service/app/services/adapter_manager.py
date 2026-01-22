@@ -125,31 +125,42 @@ class AdapterManager:
                 else:
                     yield f"错误: {str(e)}"
         else:
+            first_chunk = True
             async for chunk in self._builtin_adapter(model_cfg, request):
                 yield chunk
 
-                duration = (time.perf_counter() - start_time) * 1000
-
-                # 2. 模型处理 Trace (LLM -> LLM)
-                yield {
-                    "trace": {
-                        "source": "Remote Provider",
-                        "target": "Remote Provider",
-                        "action": "模型推理中",
-                        "data": {"duration_ms": round(duration, 2)},
+                if first_chunk:
+                    duration = (time.perf_counter() - start_time) * 1000
+                    # 2. 模型处理 Trace (LLM -> LLM) - 仅发送一次代表开始推理
+                    yield {
+                        "trace": {
+                            "source": "Remote Provider",
+                            "target": "Remote Provider",
+                            "action": "模型推理中",
+                            "data": {"start_duration_ms": round(duration, 2)},
+                        }
                     }
-                }
-
-                # 3. 响应返回 Trace (LLM -> Gateway -> Agent)
-                # 为了在时序图上直观展示数据返回给调用方(Agent)，这里 Target 设为 Agent
-                yield {
-                    "trace": {
-                        "source": "Remote Provider",
-                        "target": "Agent",
-                        "action": "接收模型响应",
-                        "data": {"endpoint": "stream://done"},
+                    # 3. 响应返回 Trace (LLM -> Agent) - 仅发送一次代表首字节返回
+                    yield {
+                        "trace": {
+                            "source": "Remote Provider",
+                            "target": "Agent",
+                            "action": "接收模型响应",
+                            "data": {"status": "streaming"},
+                        }
                     }
+                    first_chunk = False
+
+            # 流结束，发送一个完成 Trace
+            final_duration = (time.perf_counter() - start_time) * 1000
+            yield {
+                "trace": {
+                    "source": "Remote Provider",
+                    "target": "Agent",
+                    "action": "响应接收完成",
+                    "data": {"total_duration_ms": round(final_duration, 2)},
                 }
+            }
 
     async def _builtin_adapter(
         self, model_cfg: ModelAdapterConfig, request: ChatCompletionRequest

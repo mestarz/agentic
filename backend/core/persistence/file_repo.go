@@ -9,17 +9,23 @@ import (
 	"path/filepath"
 	"sort"
 	"strings"
+	"sync"
 )
 
 type FileHistoryRepository struct {
-	basePath string
+	basePath  string
+	diagCache map[string]*domain.Session // 诊断会话内存缓存
+	mu        sync.RWMutex               // 保护 diagCache
 }
 
 func NewFileHistoryRepository(base string) (*FileHistoryRepository, error) {
 	if err := os.MkdirAll(base, 0755); err != nil {
 		return nil, err
 	}
-	return &FileHistoryRepository{basePath: base}, nil
+	return &FileHistoryRepository{
+		basePath:  base,
+		diagCache: make(map[string]*domain.Session),
+	}, nil
 }
 
 func (r *FileHistoryRepository) sessionPath(id string) string {
@@ -27,6 +33,14 @@ func (r *FileHistoryRepository) sessionPath(id string) string {
 }
 
 func (r *FileHistoryRepository) SaveSession(ctx context.Context, s *domain.Session) error {
+	// 如果是诊断会话，仅存入内存缓存
+	if strings.HasPrefix(s.ID, "diag-") {
+		r.mu.Lock()
+		r.diagCache[s.ID] = s
+		r.mu.Unlock()
+		return nil
+	}
+
 	data, err := json.MarshalIndent(s, "", "  ")
 	if err != nil {
 		return err
@@ -39,6 +53,16 @@ func (r *FileHistoryRepository) SaveSession(ctx context.Context, s *domain.Sessi
 }
 
 func (r *FileHistoryRepository) GetSession(ctx context.Context, id string) (*domain.Session, error) {
+	// 优先从内存缓存中获取诊断会话
+	if strings.HasPrefix(id, "diag-") {
+		r.mu.RLock()
+		s, ok := r.diagCache[id]
+		r.mu.RUnlock()
+		if ok {
+			return s, nil
+		}
+	}
+
 	data, err := os.ReadFile(r.sessionPath(id))
 	if err != nil {
 		return nil, err
@@ -62,6 +86,12 @@ func (r *FileHistoryRepository) List(ctx context.Context) ([]domain.SessionSumma
 			continue
 		}
 		id := strings.TrimSuffix(f.Name(), ".json")
+
+		// 过滤掉诊断会话（即使它们意外存在于磁盘上）
+		if strings.HasPrefix(id, "diag-") {
+			continue
+		}
+
 		data, err := os.ReadFile(r.sessionPath(id))
 		if err != nil {
 			continue
@@ -86,11 +116,23 @@ func (r *FileHistoryRepository) List(ctx context.Context) ([]domain.SessionSumma
 }
 
 func (r *FileHistoryRepository) Delete(ctx context.Context, id string) error {
+	if strings.HasPrefix(id, "diag-") {
+		r.mu.Lock()
+		delete(r.diagCache, id)
+		r.mu.Unlock()
+		return nil
+	}
 	return os.Remove(r.sessionPath(id))
 }
 
 func (r *FileHistoryRepository) DeleteBatch(ctx context.Context, ids []string) error {
 	for _, id := range ids {
+		if strings.HasPrefix(id, "diag-") {
+			r.mu.Lock()
+			delete(r.diagCache, id)
+			r.mu.Unlock()
+			continue
+		}
 		_ = os.Remove(r.sessionPath(id))
 	}
 	return nil

@@ -12,7 +12,7 @@ import { DocsView } from './components/docs/DocsView';
 import { SettingsView } from './components/settings/SettingsView';
 import { ModelsView } from './components/models/ModelsView';
 import { TestCasesView } from './components/chat/TestCasesView';
-import { LogsView } from './components/logs/LogsView';
+import { SystemLogsView } from './components/system-logs/SystemLogsView';
 
 function App() {
   const [view, setView] = useState<'chat' | 'docs' | 'settings' | 'models' | 'testcases' | 'logs'>(
@@ -206,7 +206,7 @@ function App() {
         <TestCasesView onBack={() => setView('chat')} onRun={handleRunTestCase} />
       )}
 
-      {view === 'logs' && <LogsView />}
+      {view === 'logs' && <SystemLogsView />}
     </div>
   );
 }

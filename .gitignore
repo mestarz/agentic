@@ -10,7 +10,7 @@ server
 bin/
 
 # Logs
-logs/
+/logs/
 *.log
 
 # Data (Conversations & Database)

@@ -188,7 +188,7 @@ export function ChatWindow({
               <div
                 className={`rounded-2xl border p-5 shadow-sm ${m.role === 'user' ? 'border-indigo-500 bg-indigo-600 text-white' : 'border-slate-100 bg-slate-50 text-slate-800'} ${activeTraceIndex === i ? 'ring-2 ring-indigo-500 ring-offset-2' : ''}`}
               >
-                <div className="markdown-content text-sm leading-relaxed">
+                <div className="text-sm leading-relaxed">
                   <Markdown content={m.content} />
                 </div>
               </div>

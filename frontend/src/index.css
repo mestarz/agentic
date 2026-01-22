@@ -10,37 +10,6 @@
   }
 }
 
-/* 修复 Markdown 样式被 Tailwind 抹除的问题 */
-.markdown-content {
-}
-.markdown-content h1 {
-  @apply mt-2 mb-4 border-b pb-1 text-2xl font-bold;
-}
-.markdown-content h2 {
-  @apply mt-4 mb-3 border-b pb-1 text-xl font-bold;
-}
-.markdown-content h3 {
-  @apply mt-3 mb-2 text-lg font-bold;
-}
-.markdown-content p {
-  @apply mb-3 leading-relaxed whitespace-pre-wrap;
-}
-.markdown-content ul {
-  @apply mb-3 ml-5 list-disc;
-}
-.markdown-content ol {
-  @apply mb-3 ml-5 list-decimal;
-}
-.markdown-content li {
-  @apply mb-1;
-}
-.markdown-content code:not(pre code) {
-  @apply rounded bg-slate-200 px-1.5 py-0.5 font-mono text-sm whitespace-nowrap text-pink-600;
-}
-.markdown-content pre code {
-  @apply whitespace-pre;
-}
-
 /* 终端深色滚动条 */
 .terminal-scrollbar::-webkit-scrollbar {
   width: 6px;

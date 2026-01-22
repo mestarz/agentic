@@ -85,8 +85,8 @@ export function DocsView() {
               <Loader2 size={32} className="animate-spin text-indigo-200" />
             </div>
           ) : (
-            <div className="prose prose-slate prose-headings:font-black prose-a:text-indigo-600 prose-pre:bg-slate-900 prose-pre:text-slate-50 max-w-4xl">
-              <Markdown content={content} />
+            <div className="max-w-5xl">
+              <Markdown content={content} variant="document" />
             </div>
           )}
         </div>

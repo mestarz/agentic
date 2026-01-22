@@ -69,10 +69,11 @@ export function SequenceObserver({
     // Agent
     'Receive Query': '接收用户指令',
     'Loading History': '加载历史会话',
-    'Get Optimized Context': '获取优化上下文',
     'Return Payload': '返回处理结果',
+    'Return Context': '返回上下文',
     'Final Response': '生成最终回复',
     // Core
+    'Get Optimized Context': '获取优化上下文',
     'Context Analysis': '上下文语义分析',
     'Retrieving Relevant Bits': '检索相关知识碎片',
     'Building Payload': '构建上下文负载',
@@ -93,8 +94,10 @@ export function SequenceObserver({
     'Token Counting': '计算 Token 消耗',
     'Adapter Transform': '模型协议转换',
     'Start Streaming': '启动流式传输',
+    'Start Chat Stream': '启动流式对话',
     'First Chunk Received': '接收首个数据块',
     'Stream Complete': '流式传输完成',
+    'Streaming Content': '流式内容返回',
     // Agent Extra
     'Append Assistant Message': '固化助手回复',
     'Interrupt Detected': '检测到交互中断',

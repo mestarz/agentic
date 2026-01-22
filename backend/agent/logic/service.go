@@ -227,8 +227,8 @@ func (s *AgentService) Chat(ctx context.Context, sessionID, query, agentModelID,
 		})
 	}
 
-	emitTrace("Frontend", "Agent", "Receive Query", query)
-	emitTrace("Agent", "Core", "Get Optimized Context", map[string]interface{}{
+	emitTrace("Frontend", "Agent", "接收用户指令", query)
+	emitTrace("Agent", "Core", "获取优化上下文", map[string]interface{}{
 		"query":               query,
 		"model_id":            coreModelID,
 		"rag_enabled":         ragEnabled,
@@ -237,7 +237,7 @@ func (s *AgentService) Chat(ctx context.Context, sessionID, query, agentModelID,
 
 	optimizedMsgs, err := s.coreClient.GetOptimizedContext(ctx, sessionID, query, coreModelID, ragEnabled, ragEmbeddingModel)
 	if err != nil {
-		emitTrace("Agent", "Frontend", "Error", err.Error())
+		emitTrace("Agent", "Frontend", "发生错误", err.Error())
 		close(out)
 		return
 	}
@@ -262,7 +262,7 @@ func (s *AgentService) Chat(ctx context.Context, sessionID, query, agentModelID,
 		return res
 	}
 
-	emitTrace("Core", "Agent", "Return Context", summarizeMsgs(optimizedMsgs))
+	emitTrace("Core", "Agent", "返回上下文", summarizeMsgs(optimizedMsgs))
 
 	gatewayChan := make(chan GatewayChunk)
 	var fullResponse strings.Builder
@@ -270,7 +270,7 @@ func (s *AgentService) Chat(ctx context.Context, sessionID, query, agentModelID,
 	persistAndFinalize := func() {
 		if fullResponse.Len() > 0 {
 			content := fullResponse.String()
-			emitTrace("Agent", "Core", "Append Assistant Message")
+			emitTrace("Agent", "Core", "固化助手回复")
 			finalMeta := s.coreClient.AppendAssistantMessage(context.Background(), sessionID, domain.Message{
 				Role:      domain.RoleAssistant,
 				Content:   content,
@@ -283,7 +283,7 @@ func (s *AgentService) Chat(ctx context.Context, sessionID, query, agentModelID,
 		}
 	}
 
-	emitTrace("Agent", "Gateway", "Start Chat Stream", map[string]interface{}{
+	emitTrace("Agent", "Gateway", "启动流式对话", map[string]interface{}{
 		"model": agentModelID,
 	})
 
@@ -292,7 +292,7 @@ func (s *AgentService) Chat(ctx context.Context, sessionID, query, agentModelID,
 		for {
 			select {
 			case <-ctx.Done():
-				emitTrace("Agent", "System", "Context Cancelled")
+				emitTrace("Agent", "System", "上下文已取消")
 				persistAndFinalize()
 				return
 			case chunk, ok := <-gatewayChan:

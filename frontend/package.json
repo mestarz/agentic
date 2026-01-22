@@ -19,6 +19,7 @@
     "@uiw/react-codemirror": "^4.25.4",
     "axios": "^1.13.2",
     "lucide-react": "^0.562.0",
+    "mermaid": "^11.12.2",
     "react": "^19.2.0",
     "react-dom": "^19.2.0",
     "react-markdown": "^10.1.0",

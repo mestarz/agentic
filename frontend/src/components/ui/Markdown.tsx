@@ -2,6 +2,7 @@ import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter';
 import { vscDarkPlus } from 'react-syntax-highlighter/dist/esm/styles/prism';
+import Mermaid from './Mermaid';
 
 interface MarkdownProps {
   content: string;
@@ -178,10 +179,16 @@ export function Markdown({ content, variant = 'chat', className = '' }: Markdown
             children?: React.ReactNode;
           }) {
             const match = /language-(\w+)/.exec(className || '');
+            const language = match ? match[1] : '';
+
+            if (!inline && language === 'mermaid') {
+              return <Mermaid chart={String(children).replace(/\n$/, '')} />;
+            }
+
             return !inline && match ? (
               <SyntaxHighlighter
                 style={vscDarkPlus as Record<string, React.CSSProperties>}
-                language={match[1]}
+                language={language}
                 PreTag="div"
                 className="my-4 rounded-lg shadow-sm"
                 {...props}

@@ -220,6 +220,53 @@ class AdapterManager:
         if not model_cfg:
             raise ValueError(f"Model {model_id} not found")
 
+        if model_cfg.type == "custom" and model_cfg.script_content:
+            try:
+                script_path = os.path.join(self.scripts_dir, f"{model_id}.py")
+                with open(script_path, "w") as f:
+                    f.write(model_cfg.script_content)
+
+                spec = importlib.util.spec_from_file_location(
+                    f"adapter_{model_id}", script_path
+                )
+                module = importlib.util.module_from_spec(spec)
+                spec.loader.exec_module(module)
+
+                script_config = model_cfg.config if model_cfg.config is not None else {}
+
+                if hasattr(module, "get_embeddings"):
+                    func = module.get_embeddings
+                    if inspect.iscoroutinefunction(func):
+                        res = await func(input_text, script_config)
+                    else:
+                        res = func(input_text, script_config)
+
+                    # Ensure standard response fields
+                    if isinstance(res, dict):
+                        if "error" in res:
+                            raise Exception(f"Custom script error: {res['error']}")
+                        if "model" not in res:
+                            res["model"] = model_id
+                        if "usage" not in res:
+                            res["usage"] = {"prompt_tokens": 0, "total_tokens": 0}
+                        if "object" not in res:
+                            res["object"] = "list"
+                    return res
+                else:
+                    raise ValueError(
+                        f"Script for {model_id} does not have 'get_embeddings' function"
+                    )
+            except Exception as e:
+                import traceback
+
+                print(traceback.format_exc())
+                raise Exception(f"Error executing custom embedding script: {str(e)}")
+        else:
+            return await self._builtin_embedding_adapter(model_cfg, input_text)
+
+    async def _builtin_embedding_adapter(
+        self, model_cfg: ModelAdapterConfig, input_text: Union[str, List[str]]
+    ):
         cfg = model_cfg.config
         api_key = cfg.get("api_key", "")
         base_url = cfg.get("base_url", "").rstrip("/")

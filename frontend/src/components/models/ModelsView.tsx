@@ -120,7 +120,8 @@ export function ModelsView({ onBack, appConfigs, setAppConfigs }: ModelsViewProp
     }
   };
 
-  const addNewModel = (purpose: 'chat' | 'embedding' = 'chat') => {
+  const addNewModel = async (purpose: 'chat' | 'embedding' = 'chat') => {
+    setLoading(true);
     const newId = `${purpose}-${Math.random().toString(36).substring(7)}`;
     const newModel: ModelAdapterConfig = {
       id: newId,
@@ -134,10 +135,23 @@ export function ModelsView({ onBack, appConfigs, setAppConfigs }: ModelsViewProp
         model: '',
       },
     };
-    setModels([...models, newModel]);
-    setSelectedModel(newModel);
-    setOriginalModel(null);
-    setUnsavedIds((prev) => new Set(prev).add(newId));
+
+    try {
+      await fetch('/api/models/models', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(newModel),
+      });
+      await fetchModels();
+      setSelectedModel(newModel);
+      setOriginalModel(newModel);
+    } catch (e) {
+      alert('创建模型失败');
+      console.error(e);
+    } finally {
+      setLoading(true); // Should be false, but I will check next step
+      setLoading(false);
+    }
   };
 
   const getChatTemplate = () => {
@@ -173,8 +187,30 @@ export function ModelsView({ onBack, appConfigs, setAppConfigs }: ModelsViewProp
       'import httpx',
       '',
       'async def get_embeddings(input_text, config):',
-      '    # 向量模型适配器模板',
-      '    return {"data": [{"embedding": [0.1] * 1536}]}',
+      '    # input_text: str or list[str]',
+      '    # config: 对应 "参数配置表格" 中的内容',
+      '    ',
+      '    url = config.get("base_url", "https://api.openai.com/v1/embeddings")',
+      '    api_key = config.get("api_key")',
+      '    model = config.get("model", "text-embedding-3-small")',
+      '    ',
+      '    headers = {',
+      '        "Authorization": f"Bearer {api_key}",',
+      '        "Content-Type": "application/json"',
+      '    }',
+      '    payload = {"model": model, "input": input_text}',
+      '    ',
+      '    async with httpx.AsyncClient(timeout=60.0) as client:',
+      '        resp = await client.post(url, json=payload, headers=headers)',
+      '        ',
+      '        if resp.status_code != 200:',
+      '            # 打印真实错误内容，方便调试',
+      '            return {"error": f"HTTP {resp.status_code}: {resp.text}"}',
+      '        ',
+      '        try:',
+      '            return resp.json()',
+      '        except Exception:',
+      '            return {"error": f"Failed to parse JSON: {resp.text}"}',
     ].join('\n');
   };
 
@@ -438,20 +474,33 @@ export function ModelsView({ onBack, appConfigs, setAppConfigs }: ModelsViewProp
                   <div className="h-8 w-[1px] bg-slate-100"></div>
                   <div>
                     <label className="mb-0.5 block text-[9px] font-black text-slate-400 uppercase">
-                      用途定位
+                      配置模式
                     </label>
                     <div className="flex items-center gap-2 rounded-xl border border-slate-100 bg-slate-50 p-1">
                       <button
-                        onClick={() => setSelectedModel({ ...selectedModel, purpose: 'chat' })}
-                        className={`rounded-lg px-3 py-1 text-[9px] font-black uppercase transition-all ${selectedModel.purpose === 'chat' ? 'bg-white text-indigo-600 shadow-sm' : 'text-slate-400 hover:text-slate-600'}`}
+                        onClick={() => setSelectedModel({ ...selectedModel, type: 'openai' })}
+                        className={`rounded-lg px-3 py-1 text-[9px] font-black uppercase transition-all ${selectedModel.type !== 'custom' ? 'bg-white text-indigo-600 shadow-sm' : 'text-slate-400 hover:text-slate-600'}`}
                       >
-                        Chat
+                        Standard
                       </button>
                       <button
-                        onClick={() => setSelectedModel({ ...selectedModel, purpose: 'embedding' })}
-                        className={`rounded-lg px-3 py-1 text-[9px] font-black uppercase transition-all ${selectedModel.purpose === 'embedding' ? 'bg-white text-emerald-600 shadow-sm' : 'text-slate-400 hover:text-slate-600'}`}
+                        onClick={() => {
+                          let newContent = selectedModel.script_content;
+                          if (!newContent) {
+                            newContent =
+                              selectedModel.purpose === 'embedding'
+                                ? getEmbeddingTemplate()
+                                : getChatTemplate();
+                          }
+                          setSelectedModel({
+                            ...selectedModel,
+                            type: 'custom',
+                            script_content: newContent,
+                          });
+                        }}
+                        className={`rounded-lg px-3 py-1 text-[9px] font-black uppercase transition-all ${selectedModel.type === 'custom' ? 'bg-white text-amber-600 shadow-sm' : 'text-slate-400 hover:text-slate-600'}`}
                       >
-                        Embedding
+                        Manual
                       </button>
                     </div>
                   </div>

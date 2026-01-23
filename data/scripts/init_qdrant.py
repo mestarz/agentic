@@ -24,10 +24,25 @@ def init_collection(name, recreate=False):
         else:
             # Check dimension
             data = resp.json()
-            current_size = data.get("result", {}).get("config", {}).get("params", {}).get("vectors", {}).get("size")
-            if current_size != VECTOR_SIZE:
+            try:
+                # Try standard single vector config
+                vectors_config = data.get("result", {}).get("config", {}).get("params", {}).get("vectors", {})
+                if isinstance(vectors_config, dict):
+                    current_size = vectors_config.get("size")
+                else:
+                    print(f"Warning: Unexpected vectors config format for '{name}': {vectors_config}")
+                    current_size = None
+                
+                print(f"Collection '{name}' detected size: {current_size}, expected: {VECTOR_SIZE}")
+            except Exception as e:
+                print(f"Error parsing config for '{name}': {e}")
+                current_size = None
+
+            if current_size is not None and current_size != VECTOR_SIZE:
                 print(f"Collection '{name}' has wrong dimension: {current_size}, expected: {VECTOR_SIZE}. Recreating...")
                 recreate = True
+            elif current_size is None:
+                print(f"Could not determine dimension for '{name}'. Skipping recreation safety check.")
             else:
                 print(f"Collection '{name}' already exists with correct dimension.")
                 return

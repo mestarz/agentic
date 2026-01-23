@@ -86,12 +86,11 @@ export function SystemLogsView() {
               : undefined,
             category: parsed.action || 'Event',
             level: 'info',
-            message:
-              typeof parsed.details === 'object'
-                ? JSON.stringify(parsed.details)
-                : String(parsed.details),
-            raw: line,
-          };
+                        message: typeof parsed.details === 'object' 
+                          ? JSON.stringify(parsed.details, null, 2) 
+                          : String(parsed.details),
+                        raw: line,
+                      };
         } catch (error) {
           console.debug(
             'Failed to parse memory log line as JSON, falling back to text mode:',
@@ -443,7 +442,7 @@ export function SystemLogsView() {
 
                     {/* Message */}
                     <span
-                      className={`break-all ${
+                      className={`break-all whitespace-pre-wrap ${
                         log.level === 'error'
                           ? 'text-rose-700'
                           : log.level === 'warning'

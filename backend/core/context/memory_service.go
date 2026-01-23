@@ -138,7 +138,7 @@ func (s *MemoryService) Reflect(ctx context.Context) error {
 	}
 
 	log.Printf("[Memory] Reflection: Found %d pending facts to process", len(facts))
-	s.logEvent("slow_system", "start_cycle", map[string]interface{}{
+	s.logEvent("Reflection", "cycle_start", map[string]interface{}{
 		"pending_facts_count": len(facts),
 	})
 
@@ -161,7 +161,7 @@ func (s *MemoryService) Reflect(ctx context.Context) error {
 			continue
 		}
 
-		s.logEvent("slow_system", "evolution_decision", map[string]interface{}{
+		s.logEvent("Reflection", "shared_evolution", map[string]interface{}{
 			"fact_id":          fact.ID,
 			"fact_content":     fact.Content,
 			"related_memories": related,
@@ -346,7 +346,7 @@ func (s *MemoryService) processIngest(ctx context.Context, task ingestTask) erro
 	}
 	log.Printf("[Memory] Ingest: LLM extracted %d facts from dialogue", len(facts))
 
-	s.logEvent("fast_system", "sanitize", map[string]interface{}{
+	s.logEvent("Ingestion", "staging_ingest", map[string]interface{}{
 		"session_id":     task.SessionID,
 		"input_messages": len(task.Messages),
 		"output_facts":   facts,

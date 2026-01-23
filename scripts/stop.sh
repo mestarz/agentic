@@ -7,7 +7,7 @@ echo "正在停止所有 ContextFabric 服务..."
 echo "停止 Qdrant 容器..."
 docker stop agentic-qdrant > /dev/null 2>&1
 
-for service in core agent frontend llm-gateway; do
+for service in core agent frontend llm-gateway qdrant-logger; do
     if [ -f "$LOG_DIR/$service.pid" ]; then
         PID=$(cat "$LOG_DIR/$service.pid")
         echo "停止 $service (PID: $PID)..."

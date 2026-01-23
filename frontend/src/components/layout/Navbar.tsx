@@ -1,8 +1,19 @@
-import { Server, Activity, BookOpen, Settings, Box, Beaker, FileText } from 'lucide-react';
+import {
+  Server,
+  Activity,
+  BookOpen,
+  Settings,
+  Box,
+  Beaker,
+  FileText,
+  Database,
+} from 'lucide-react';
 
 interface NavbarProps {
-  view: 'chat' | 'docs' | 'settings' | 'models' | 'testcases' | 'logs';
-  setView: (view: 'chat' | 'docs' | 'settings' | 'models' | 'testcases' | 'logs') => void;
+  view: 'chat' | 'docs' | 'settings' | 'models' | 'testcases' | 'logs' | 'vectors';
+  setView: (
+    view: 'chat' | 'docs' | 'settings' | 'models' | 'testcases' | 'logs' | 'vectors',
+  ) => void;
 }
 
 export function Navbar({ view, setView }: NavbarProps) {
@@ -27,6 +38,13 @@ export function Navbar({ view, setView }: NavbarProps) {
         className={`rounded-xl p-3 transition-all ${view === 'models' ? 'bg-indigo-600 text-white shadow-lg' : 'text-slate-400 hover:text-slate-200'}`}
       >
         <Box size={24} />
+      </button>
+      <button
+        title="向量数据库"
+        onClick={() => setView('vectors')}
+        className={`rounded-xl p-3 transition-all ${view === 'vectors' ? 'bg-indigo-600 text-white shadow-lg' : 'text-slate-400 hover:text-slate-200'}`}
+      >
+        <Database size={24} />
       </button>
       <button
         title="测试用例"

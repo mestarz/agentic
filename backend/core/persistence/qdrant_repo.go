@@ -277,3 +277,37 @@ func (r *QdrantRepository) SearchSharedMemories(ctx context.Context, vector []fl
 func (r *QdrantRepository) UpdateSharedMemory(ctx context.Context, mem *domain.SharedMemory) error {
 	return r.SaveSharedMemory(ctx, mem) // Qdrant PUT is upsert
 }
+
+// ScrollPoints Generic scroll for admin viewer
+func (r *QdrantRepository) ScrollPoints(ctx context.Context, collection string, limit int, offset interface{}) (map[string]interface{}, error) {
+	endpoint := fmt.Sprintf("%s/collections/%s/points/scroll", r.baseURL, collection)
+
+	payload := map[string]interface{}{
+		"limit":        limit,
+		"with_payload": true,
+		"with_vector":  false, // Don't return full vectors to save bandwidth
+	}
+	if offset != nil {
+		payload["offset"] = offset
+	}
+
+	data, _ := json.Marshal(payload)
+	req, _ := http.NewRequestWithContext(ctx, "POST", endpoint, bytes.NewBuffer(data))
+	req.Header.Set("Content-Type", "application/json")
+
+	resp, err := r.client.Do(req)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != 200 {
+		return nil, fmt.Errorf("qdrant scroll error: %s", resp.Status)
+	}
+
+	var result map[string]interface{}
+	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+		return nil, err
+	}
+	return result, nil
+}

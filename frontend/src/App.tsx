@@ -13,11 +13,12 @@ import { SettingsView } from './components/settings/SettingsView';
 import { ModelsView } from './components/models/ModelsView';
 import { TestCasesView } from './components/chat/TestCasesView';
 import { SystemLogsView } from './components/system-logs/SystemLogsView';
+import { VectorsView } from './components/vectors/VectorsView';
 
 function App() {
-  const [view, setView] = useState<'chat' | 'docs' | 'settings' | 'models' | 'testcases' | 'logs'>(
-    'chat',
-  );
+  const [view, setView] = useState<
+    'chat' | 'docs' | 'settings' | 'models' | 'testcases' | 'logs' | 'vectors'
+  >('chat');
   const [activeTraceIndex, setActiveTraceIndex] = useState<number | null>(null);
   const [selectedTraceId, setSelectedTraceId] = useState<number | null>(null);
   const [isObserverExpanded, setIsObserverExpanded] = useState(false);
@@ -207,6 +208,8 @@ function App() {
       )}
 
       {view === 'logs' && <SystemLogsView />}
+
+      {view === 'vectors' && <VectorsView />}
     </div>
   );
 }

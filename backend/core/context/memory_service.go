@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"context-fabric/backend/core/domain"
+	"context-fabric/backend/core/util"
 	"encoding/json"
 	"fmt"
 	"log"
@@ -104,9 +105,13 @@ type instructionDTO struct {
 
 func (s *MemoryService) getEvolutionInstructions(ctx context.Context, fact domain.StagingFact, related []domain.SharedMemory) ([]instructionDTO, error) {
 	url := fmt.Sprintf("%s/v1/memory/reflect", s.llmServiceURL)
+	modelID := util.GetEnv("AGENTIC_REFLECTION_MODEL", "")
+	if modelID == "" {
+		return nil, fmt.Errorf("reflection model not configured (AGENTIC_REFLECTION_MODEL)")
+	}
 
 	payload := map[string]interface{}{
-		"model":            "deepseek-chat",
+		"model":            modelID,
 		"new_facts":        []domain.StagingFact{fact},
 		"related_memories": related,
 	}
@@ -212,7 +217,13 @@ func (s *MemoryService) processIngest(ctx context.Context, task ingestTask) erro
 	log.Printf("[Memory] Ingest: Start sanitizing session %s (%d messages)", task.SessionID, len(task.Messages))
 
 	// 1. 调用 LLM Gateway 进行清洗
-	facts, err := s.sanitizeDialogue(ctx, task.Messages)
+	// 使用任务中指定的模型 ID，如果为空则直接报错
+	sanitizeModel := task.ModelID
+	if sanitizeModel == "" {
+		return fmt.Errorf("no model ID provided for memory ingestion")
+	}
+
+	facts, err := s.sanitizeDialogue(ctx, task.Messages, sanitizeModel)
 	if err != nil {
 		return err
 	}
@@ -254,11 +265,11 @@ type factDTO struct {
 	Topic   string `json:"topic"`
 }
 
-func (s *MemoryService) sanitizeDialogue(ctx context.Context, msgs []domain.Message) ([]factDTO, error) {
+func (s *MemoryService) sanitizeDialogue(ctx context.Context, msgs []domain.Message, modelID string) ([]factDTO, error) {
 	url := fmt.Sprintf("%s/v1/memory/sanitize", s.llmServiceURL)
 
 	payload := map[string]interface{}{
-		"model":    "deepseek-chat", // 默认使用较强的模型进行清洗
+		"model":    modelID,
 		"messages": msgs,
 	}
 

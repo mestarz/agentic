@@ -9,6 +9,7 @@ import {
   Zap,
   Cloud,
   Monitor,
+  Database,
   Search,
   AlertCircle,
   AlertTriangle,
@@ -18,7 +19,7 @@ import {
   X,
 } from 'lucide-react';
 
-type LogType = 'core' | 'agent' | 'llm' | 'frontend';
+type LogType = 'core' | 'agent' | 'llm' | 'frontend' | 'qdrant';
 type LogLevel = 'all' | 'error' | 'warning' | 'info';
 
 interface LogEntry {
@@ -63,6 +64,11 @@ export function SystemLogsView() {
 
     return () => clearInterval(interval);
   }, [fetchLogs, autoRefresh]);
+
+  // 当日志内容变化或切换日志时，自动滚动到底部
+  useEffect(() => {
+    scrollToBottom();
+  }, [content, activeLog]);
 
   const parseLogLine = useCallback(
     (line: string, index: number): LogEntry => {
@@ -122,6 +128,28 @@ export function SystemLogsView() {
         };
       }
 
+      // Qdrant (Rust style): 2026-01-23T07:33:04.123456Z INFO qdrant::...
+      // or simple: INFO ...
+      if (activeLog === 'qdrant') {
+        let level: LogEntry['level'] = 'info';
+        if (line.includes('ERROR')) level = 'error';
+        if (line.includes('WARN')) level = 'warning';
+        if (line.includes('DEBUG')) level = 'debug';
+
+        // Try to extract timestamp if present (ISO 8601ish)
+        const tsMatch = line.match(/^(\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?Z)/);
+        const timestamp = tsMatch ? tsMatch[1] : undefined;
+
+        return {
+          id,
+          timestamp,
+          level,
+          message: line,
+          raw: line,
+          category: 'Qdrant',
+        };
+      }
+
       // Generic fallback
       let level: LogEntry['level'] = 'info';
       const upperLine = line.toUpperCase();
@@ -171,6 +199,12 @@ export function SystemLogsView() {
     { id: 'core', label: '核心服务 (Core)', icon: <Cpu size={16} />, color: 'text-emerald-500' },
     { id: 'agent', label: '代理服务 (Agent)', icon: <Zap size={16} />, color: 'text-indigo-500' },
     { id: 'llm', label: '模型网关 (LLM)', icon: <Cloud size={16} />, color: 'text-rose-500' },
+    {
+      id: 'qdrant',
+      label: '向量数据库 (Qdrant)',
+      icon: <Database size={16} />,
+      color: 'text-amber-600',
+    },
     { id: 'frontend', label: '前端服务 (Web)', icon: <Monitor size={16} />, color: 'text-sky-500' },
   ];
 

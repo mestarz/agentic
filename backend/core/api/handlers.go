@@ -4,6 +4,7 @@ import (
 	"context-fabric/backend/core/context"
 	"context-fabric/backend/core/domain"
 	"context-fabric/backend/core/history"
+	"context-fabric/backend/core/persistence"
 	"encoding/json"
 	"net/http"
 	"os"
@@ -65,9 +66,14 @@ func (h *ContextHandler) GetContext(w http.ResponseWriter, r *http.Request) {
 }
 
 // AdminHandler 处理会话管理和测试用例相关的管理端请求
-type AdminHandler struct{ history *history.Service }
+type AdminHandler struct {
+	history    *history.Service
+	vectorRepo *persistence.QdrantRepository
+}
 
-func NewAdminHandler(h *history.Service) *AdminHandler { return &AdminHandler{history: h} }
+func NewAdminHandler(h *history.Service, v *persistence.QdrantRepository) *AdminHandler {
+	return &AdminHandler{history: h, vectorRepo: v}
+}
 
 func (h *AdminHandler) parseID(r *http.Request) string {
 	parts := strings.Split(strings.Trim(r.URL.Path, "/"), "/")
@@ -155,6 +161,35 @@ func (h *AdminHandler) ServeSessions(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(list)
 }
 
+func (h *AdminHandler) ServeVectors(w http.ResponseWriter, r *http.Request) {
+	if h.vectorRepo == nil {
+		http.Error(w, "Vector repository not configured", http.StatusNotImplemented)
+		return
+	}
+
+	collection := r.URL.Query().Get("collection")
+	if collection == "" {
+		// List available collections (simulated for now, based on env known ones)
+		// Or just error out. Let's return the configured ones if possible, but
+		// the repo struct has them private or we need getters.
+		// For now, let's require collection param.
+		http.Error(w, "Missing collection parameter", http.StatusBadRequest)
+		return
+	}
+
+	limit := 20 // default
+	// parse limit...
+
+	res, err := h.vectorRepo.ScrollPoints(r.Context(), collection, limit, nil)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(res)
+}
+
 func (h *AdminHandler) GetSystemStatus(w http.ResponseWriter, r *http.Request) {
 	qdrantURL := getEnv("QDRANT_URL", "http://localhost:6333")
 	status := "disconnected"
@@ -185,6 +220,7 @@ func (h *AdminHandler) ServeLogs(w http.ResponseWriter, r *http.Request) {
 		"agent":    "agent.log",
 		"llm":      "llm-gateway.log",
 		"frontend": "frontend.log",
+		"qdrant":   "qdrant.log",
 	}
 
 	fileName, ok := allowedFiles[fileType]

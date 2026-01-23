@@ -18,6 +18,7 @@ export QDRANT_URL="http://localhost:6333"
 export QDRANT_COLLECTION="documents"
 export AGENTIC_VECTOR_SIZE=1024
 export RAG_EMBEDDING_MODEL="embedding-c37c78"
+export AGENTIC_REFLECTION_MODEL="deepseek-chat"
 
 echo "正在启动 ContextFabric 完全隔离版 (Core + Agent + LLM Gateway)..."
 
@@ -27,6 +28,10 @@ docker run -d --name agentic-qdrant \
     -p 6333:6333 -p 6334:6334 \
     -v "$ROOT_DIR/data/qdrant:/qdrant/storage" \
     qdrant/qdrant:latest > /dev/null 2>&1 || docker start agentic-qdrant
+
+# 捕获 Qdrant 日志
+nohup docker logs -f agentic-qdrant > "$LOG_DIR/qdrant.log" 2>&1 &
+echo $! > "$LOG_DIR/qdrant-logger.pid"
 
 # 0. 启动 LLM Gateway (Python)
 echo "启动 LLM Gateway 服务..."

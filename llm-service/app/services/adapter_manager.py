@@ -3,10 +3,54 @@ import inspect
 import json
 import os
 import time
+import io
+import contextlib
+import sys
 from typing import Any, Dict, List, Union
 
 import httpx
 from app.schemas import ChatCompletionRequest, ModelAdapterConfig
+
+
+@contextlib.contextmanager
+def tee_output(buffer):
+    """
+    Context manager that redirects stdout and stderr to both
+    the original streams and a provided buffer (io.StringIO).
+    """
+    original_stdout = sys.stdout
+    original_stderr = sys.stderr
+
+    class TeeStream:
+        def __init__(self, original, capture):
+            self.original = original
+            self.capture = capture
+
+        def write(self, data):
+            # Write to original stream (e.g. terminal/log file)
+            self.original.write(data)
+            try:
+                self.original.flush()
+            except OSError:
+                pass
+            # Write to capture buffer (for diagnostics)
+            self.capture.write(data)
+
+        def flush(self):
+            try:
+                self.original.flush()
+            except OSError:
+                pass
+            self.capture.flush()
+
+    try:
+        # We replace stdout/stderr globally for this thread/context
+        sys.stdout = TeeStream(original_stdout, buffer)
+        sys.stderr = TeeStream(original_stderr, buffer)
+        yield
+    finally:
+        sys.stdout = original_stdout
+        sys.stderr = original_stderr
 
 
 class AdapterManager:
@@ -81,63 +125,68 @@ class AdapterManager:
         start_time = time.perf_counter()
 
         if model_cfg.type == "custom" and model_cfg.script_content:
+            log_capture = io.StringIO()
             try:
-                script_path = os.path.join(self.scripts_dir, f"{model_id}.py")
-                with open(script_path, "w") as f:
-                    f.write(model_cfg.script_content)
+                with tee_output(log_capture):
+                    script_path = os.path.join(self.scripts_dir, f"{model_id}.py")
+                    with open(script_path, "w") as f:
+                        f.write(model_cfg.script_content)
 
-                spec = importlib.util.spec_from_file_location(
-                    f"adapter_{model_id}", script_path
-                )
-                module = importlib.util.module_from_spec(spec)
-                spec.loader.exec_module(module)
+                    spec = importlib.util.spec_from_file_location(
+                        f"adapter_{model_id}", script_path
+                    )
+                    module = importlib.util.module_from_spec(spec)
+                    spec.loader.exec_module(module)
 
-                script_config = model_cfg.config if model_cfg.config is not None else {}
+                    script_config = (
+                        model_cfg.config if model_cfg.config is not None else {}
+                    )
 
-                first_chunk = True
-                if hasattr(module, "generate_stream"):
-                    func = module.generate_stream
+                    first_chunk = True
+                    if hasattr(module, "generate_stream"):
+                        func = module.generate_stream
 
-                    async def process_gen(gen):
-                        nonlocal first_chunk
-                        if inspect.isasyncgen(gen):
-                            async for chunk in gen:
-                                yield chunk
-                                if first_chunk:
-                                    # 2. 推理 (LLM -> LLM)
-                                    yield {
-                                        "trace": {
-                                            "source": "Remote Provider",
-                                            "target": "Remote Provider",
-                                            "action": "模型推理中",
+                        async def process_gen(gen):
+                            nonlocal first_chunk
+                            if inspect.isasyncgen(gen):
+                                async for chunk in gen:
+                                    yield chunk
+                                    if first_chunk:
+                                        # 2. 推理 (LLM -> LLM)
+                                        yield {
+                                            "trace": {
+                                                "source": "Remote Provider",
+                                                "target": "Remote Provider",
+                                                "action": "模型推理中",
+                                            }
                                         }
-                                    }
-                                    first_chunk = False
-                        else:
-                            for chunk in gen:
-                                yield chunk
-                                if first_chunk:
-                                    # 2. 推理 (LLM -> LLM)
-                                    yield {
-                                        "trace": {
-                                            "source": "Remote Provider",
-                                            "target": "Remote Provider",
-                                            "action": "模型推理中",
+                                        first_chunk = False
+                            else:
+                                for chunk in gen:
+                                    yield chunk
+                                    if first_chunk:
+                                        # 2. 推理 (LLM -> LLM)
+                                        yield {
+                                            "trace": {
+                                                "source": "Remote Provider",
+                                                "target": "Remote Provider",
+                                                "action": "模型推理中",
+                                            }
                                         }
-                                    }
-                                    first_chunk = False
+                                        first_chunk = False
 
-                    res = func(request.messages, script_config)
-                    async for item in process_gen(res):
-                        yield item
-                else:
-                    if request.is_diagnostic:
-                        yield "错误: 脚本中未找到 'generate_stream' 函数。\n"
+                        res = func(request.messages, script_config)
+                        async for item in process_gen(res):
+                            yield item
+                    else:
+                        if request.is_diagnostic:
+                            yield "错误: 脚本中未找到 'generate_stream' 函数。\n"
             except Exception as e:
                 import traceback
 
+                logs = log_capture.getvalue()
                 if request.is_diagnostic:
-                    yield f"执行错误:\n{traceback.format_exc()}\n"
+                    yield f"执行错误:\n{traceback.format_exc()}\n\n[脚本输出日志]:\n{logs}"
                 else:
                     yield f"错误: {str(e)}"
         else:
@@ -221,46 +270,63 @@ class AdapterManager:
             raise ValueError(f"Model {model_id} not found")
 
         if model_cfg.type == "custom" and model_cfg.script_content:
+            log_capture = io.StringIO()
             try:
-                script_path = os.path.join(self.scripts_dir, f"{model_id}.py")
-                with open(script_path, "w") as f:
-                    f.write(model_cfg.script_content)
+                with tee_output(log_capture):
+                    script_path = os.path.join(self.scripts_dir, f"{model_id}.py")
+                    with open(script_path, "w") as f:
+                        f.write(model_cfg.script_content)
 
-                spec = importlib.util.spec_from_file_location(
-                    f"adapter_{model_id}", script_path
-                )
-                module = importlib.util.module_from_spec(spec)
-                spec.loader.exec_module(module)
-
-                script_config = model_cfg.config if model_cfg.config is not None else {}
-
-                if hasattr(module, "get_embeddings"):
-                    func = module.get_embeddings
-                    if inspect.iscoroutinefunction(func):
-                        res = await func(input_text, script_config)
-                    else:
-                        res = func(input_text, script_config)
-
-                    # Ensure standard response fields
-                    if isinstance(res, dict):
-                        if "error" in res:
-                            raise Exception(f"Custom script error: {res['error']}")
-                        if "model" not in res:
-                            res["model"] = model_id
-                        if "usage" not in res:
-                            res["usage"] = {"prompt_tokens": 0, "total_tokens": 0}
-                        if "object" not in res:
-                            res["object"] = "list"
-                    return res
-                else:
-                    raise ValueError(
-                        f"Script for {model_id} does not have 'get_embeddings' function"
+                    spec = importlib.util.spec_from_file_location(
+                        f"adapter_{model_id}", script_path
                     )
+                    module = importlib.util.module_from_spec(spec)
+                    spec.loader.exec_module(module)
+
+                    script_config = (
+                        model_cfg.config if model_cfg.config is not None else {}
+                    )
+
+                    if hasattr(module, "get_embeddings"):
+                        func = module.get_embeddings
+                        if inspect.iscoroutinefunction(func):
+                            res = await func(input_text, script_config)
+                        else:
+                            res = func(input_text, script_config)
+
+                        # Validate that res is not a generator
+                        if inspect.isgenerator(res) or inspect.isasyncgen(res):
+                            raise ValueError(
+                                "Custom script 'get_embeddings' returned a generator. "
+                                "It must return a dictionary or list directly (do not use 'yield')."
+                            )
+
+                        # Ensure standard response fields
+                        if isinstance(res, dict):
+                            if "error" in res:
+                                raise Exception(f"Custom script error: {res['error']}")
+                            if "model" not in res:
+                                res["model"] = model_id
+                            if "usage" not in res:
+                                res["usage"] = {"prompt_tokens": 0, "total_tokens": 0}
+                            if "object" not in res:
+                                res["object"] = "list"
+                        return res
+                    else:
+                        raise ValueError(
+                            f"Script for {model_id} does not have 'get_embeddings' function"
+                        )
             except Exception as e:
                 import traceback
 
+                logs = log_capture.getvalue()
+                # Print to real stdout for server logs
                 print(traceback.format_exc())
-                raise Exception(f"Error executing custom embedding script: {str(e)}")
+                print(f"Captured Logs:\n{logs}")
+                # Raise with logs for user response
+                raise Exception(
+                    f"Error executing custom embedding script: {str(e)}\n\n[脚本日志]:\n{logs}"
+                )
         else:
             return await self._builtin_embedding_adapter(model_cfg, input_text)
 

@@ -13,6 +13,7 @@ export function useConfig() {
             coreModelID: parsed.coreModelID || parsed.agentModelID,
             ragEnabled: !!parsed.ragEnabled,
             ragEmbeddingModelID: parsed.ragEmbeddingModelID || DEFAULT_CONFIGS.ragEmbeddingModelID,
+            sanitizationModelID: parsed.sanitizationModelID || DEFAULT_CONFIGS.sanitizationModelID,
           };
         }
       } catch (err) {

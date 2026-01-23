@@ -278,6 +278,53 @@ func (r *QdrantRepository) UpdateSharedMemory(ctx context.Context, mem *domain.S
 	return r.SaveSharedMemory(ctx, mem) // Qdrant PUT is upsert
 }
 
+func (r *QdrantRepository) DeleteSharedMemory(ctx context.Context, id string) error {
+	endpoint := fmt.Sprintf("%s/collections/%s/points/delete?wait=true", r.baseURL, r.sharedColl)
+
+	payload := map[string]interface{}{
+		"points": []string{id},
+	}
+
+	data, _ := json.Marshal(payload)
+	req, _ := http.NewRequestWithContext(ctx, "POST", endpoint, bytes.NewBuffer(data))
+	req.Header.Set("Content-Type", "application/json")
+
+	resp, err := r.client.Do(req)
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != 200 {
+		return fmt.Errorf("qdrant shared delete error: %s", resp.Status)
+	}
+	return nil
+}
+
+// DeletePoints Generic delete for admin
+func (r *QdrantRepository) DeletePoints(ctx context.Context, collection string, ids []string) error {
+	endpoint := fmt.Sprintf("%s/collections/%s/points/delete?wait=true", r.baseURL, collection)
+
+	payload := map[string]interface{}{
+		"points": ids,
+	}
+
+	data, _ := json.Marshal(payload)
+	req, _ := http.NewRequestWithContext(ctx, "POST", endpoint, bytes.NewBuffer(data))
+	req.Header.Set("Content-Type", "application/json")
+
+	resp, err := r.client.Do(req)
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != 200 {
+		return fmt.Errorf("qdrant generic delete error: %s", resp.Status)
+	}
+	return nil
+}
+
 // ScrollPoints Generic scroll for admin viewer
 func (r *QdrantRepository) ScrollPoints(ctx context.Context, collection string, limit int, offset interface{}) (map[string]interface{}, error) {
 	endpoint := fmt.Sprintf("%s/collections/%s/points/scroll", r.baseURL, collection)

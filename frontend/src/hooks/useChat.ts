@@ -94,6 +94,8 @@ export function useChat({
               core_model_id: appConfigs.coreModelID,
               rag_enabled: appConfigs.ragEnabled,
               rag_embedding_model_id: appConfigs.ragEmbeddingModelID,
+              // 透传前端配置的记忆清洗模型 ID，确保后端使用正确的模型进行事实提取
+              sanitization_model_id: appConfigs.sanitizationModelID,
             }),
           });
 

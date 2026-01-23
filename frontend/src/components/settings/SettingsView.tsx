@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Settings, Zap, Cpu, ShieldCheck, Database, Search } from 'lucide-react';
+import { Settings, Zap, Cpu, ShieldCheck, Database, Search, Sparkles } from 'lucide-react';
 import type { AppConfigs, ModelAdapterConfig } from '../../types';
 import { ConfigBlock } from './ConfigBlock';
 
@@ -59,7 +59,7 @@ export function SettingsView({
           </button>
         </div>
 
-        <div className="grid grid-cols-1 gap-8 md:grid-cols-2">
+        <div className="grid grid-cols-1 gap-8 md:grid-cols-2 lg:grid-cols-3">
           <ConfigBlock
             title="对话生成阶段 (Agent LLM)"
             icon={Zap}
@@ -73,6 +73,14 @@ export function SettingsView({
             icon={Cpu}
             type="coreModelID"
             selectedID={appConfigs.coreModelID}
+            models={chatModels}
+            setAppConfigs={setAppConfigs}
+          />
+          <ConfigBlock
+            title="记忆清洗阶段 (Sanitizer)"
+            icon={Sparkles}
+            type="sanitizationModelID"
+            selectedID={appConfigs.sanitizationModelID}
             models={chatModels}
             setAppConfigs={setAppConfigs}
           />

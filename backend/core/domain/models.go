@@ -101,4 +101,5 @@ type VectorRepository interface {
 	SaveSharedMemory(ctx context.Context, mem *SharedMemory) error
 	SearchSharedMemories(ctx context.Context, vector []float32, limit int) ([]SharedMemory, error)
 	UpdateSharedMemory(ctx context.Context, mem *SharedMemory) error
+	DeleteSharedMemory(ctx context.Context, id string) error
 }

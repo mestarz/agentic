@@ -61,6 +61,9 @@ export interface AppConfigs {
   ragEnabled: boolean;
 
   ragEmbeddingModelID: string;
+
+  // 记忆清洗阶段使用的 Chat 模型 ID (用于从对话中提取事实)
+  sanitizationModelID: string;
 }
 
 export const DEFAULT_CONFIGS: AppConfigs = {
@@ -71,4 +74,6 @@ export const DEFAULT_CONFIGS: AppConfigs = {
   ragEnabled: false,
 
   ragEmbeddingModelID: 'text-embedding-3-small',
+
+  sanitizationModelID: 'deepseek-chat',
 };

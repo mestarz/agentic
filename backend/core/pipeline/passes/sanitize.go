@@ -11,12 +11,12 @@ import (
 // 这是一个“观察者”类型的 Pass，它不修改上下文内容，只负责异步提取事实。
 type SanitizePass struct {
 	memorySvc interface {
-		Ingest(ctx context.Context, sessionID string, messages []domain.Message, modelID string) error
+		Ingest(ctx context.Context, sessionID string, messages []domain.Message, modelID string, sanitizationModel string) error
 	}
 }
 
 func NewSanitizePass(svc interface {
-	Ingest(ctx context.Context, sessionID string, messages []domain.Message, modelID string) error
+	Ingest(ctx context.Context, sessionID string, messages []domain.Message, modelID string, sanitizationModel string) error
 }) *SanitizePass {
 	return &SanitizePass{memorySvc: svc}
 }

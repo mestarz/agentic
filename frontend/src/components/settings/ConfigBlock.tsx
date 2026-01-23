@@ -4,7 +4,7 @@ import type { AppConfigs, ModelAdapterConfig } from '../../types';
 interface ConfigBlockProps {
   title: string;
   icon: React.ComponentType<{ size?: number | string }>;
-  type: 'agentModelID' | 'coreModelID';
+  type: 'agentModelID' | 'coreModelID' | 'sanitizationModelID';
   selectedID: string;
   models: ModelAdapterConfig[];
   setAppConfigs: React.Dispatch<React.SetStateAction<AppConfigs>>;

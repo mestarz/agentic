@@ -1,5 +1,14 @@
 import { useState, useEffect, useCallback } from 'react';
-import { Database, RefreshCw, Server, Layers, AlignLeft } from 'lucide-react';
+import {
+  Database,
+  RefreshCw,
+  Server,
+  Layers,
+  AlignLeft,
+  Trash2,
+  CheckSquare,
+  Square,
+} from 'lucide-react';
 
 interface VectorPoint {
   id: string | number;
@@ -26,6 +35,50 @@ export function VectorsView() {
     { id: 'mem_shared', label: '长期记忆 (Shared)', icon: <Database size={16} /> },
   ];
 
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+
+  // 清空选择当集合变更时
+  useEffect(() => {
+    setSelectedIds(new Set());
+  }, [collection]);
+
+  const toggleSelect = (id: string) => {
+    const newSet = new Set(selectedIds);
+    if (newSet.has(id)) {
+      newSet.delete(id);
+    } else {
+      newSet.add(id);
+    }
+    setSelectedIds(newSet);
+  };
+
+  const toggleSelectAll = () => {
+    if (selectedIds.size === points.length && points.length > 0) {
+      setSelectedIds(new Set());
+    } else {
+      setSelectedIds(new Set(points.map((p) => String(p.id))));
+    }
+  };
+
+  const handleBatchDelete = async () => {
+    if (selectedIds.size === 0) return;
+    if (!confirm(`确定要删除选中的 ${selectedIds.size} 条记录吗？`)) return;
+
+    try {
+      const res = await fetch(`/api/admin/vectors?collection=${collection}`, {
+        method: 'DELETE',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ids: Array.from(selectedIds) }),
+      });
+      if (!res.ok) throw new Error('Batch delete failed');
+
+      setPoints((prev) => prev.filter((p) => !selectedIds.has(String(p.id))));
+      setSelectedIds(new Set());
+    } catch (err) {
+      alert('批量删除失败: ' + String(err));
+    }
+  };
+
   const fetchPoints = useCallback(async () => {
     setLoading(true);
     try {
@@ -40,6 +93,19 @@ export function VectorsView() {
       setLoading(false);
     }
   }, [collection, limit]);
+
+  const handleDelete = async (id: string | number) => {
+    if (!confirm('确定要删除这条记录吗？此操作无法撤销。')) return;
+    try {
+      const res = await fetch(`/api/admin/vectors?collection=${collection}&id=${id}`, {
+        method: 'DELETE',
+      });
+      if (!res.ok) throw new Error('Failed to delete');
+      setPoints((prev) => prev.filter((p) => p.id !== id));
+    } catch (err) {
+      alert('删除失败: ' + String(err));
+    }
+  };
 
   useEffect(() => {
     fetchPoints();
@@ -83,6 +149,30 @@ export function VectorsView() {
         {/* Toolbar */}
         <div className="flex items-center justify-between border-b border-slate-200 bg-slate-50 px-6 py-3">
           <div className="flex items-center gap-4">
+            <button
+              onClick={toggleSelectAll}
+              className="flex items-center gap-2 text-xs font-bold text-slate-600 hover:text-slate-900"
+              title="全选/反选"
+            >
+              {points.length > 0 && selectedIds.size === points.length ? (
+                <CheckSquare size={16} className="text-indigo-600" />
+              ) : (
+                <Square size={16} className="text-slate-400" />
+              )}
+            </button>
+
+            {selectedIds.size > 0 && (
+              <button
+                onClick={handleBatchDelete}
+                className="flex items-center gap-2 rounded-md bg-rose-50 px-3 py-1 text-xs font-bold text-rose-600 transition-colors hover:bg-rose-100"
+              >
+                <Trash2 size={14} />
+                <span>删除 ({selectedIds.size})</span>
+              </button>
+            )}
+
+            <div className="mx-2 h-4 w-px bg-slate-300" />
+
             <span className="text-xs font-bold text-slate-600">Limit:</span>
             <select
               value={limit}
@@ -109,20 +199,44 @@ export function VectorsView() {
             {points.map((p) => (
               <div
                 key={p.id}
-                className="rounded-lg border border-slate-200 bg-white p-4 shadow-sm transition-all hover:shadow-md"
+                className={`rounded-lg border transition-all hover:shadow-md ${
+                  selectedIds.has(String(p.id))
+                    ? 'border-indigo-300 bg-indigo-50/30 shadow-sm'
+                    : 'border-slate-200 bg-white shadow-sm'
+                } p-4`}
               >
                 <div className="mb-2 flex items-start justify-between">
-                  <div className="flex items-center gap-2">
+                  <div className="flex items-center gap-3">
+                    <button
+                      onClick={() => toggleSelect(String(p.id))}
+                      className="transition-transform active:scale-90"
+                    >
+                      {selectedIds.has(String(p.id)) ? (
+                        <CheckSquare size={18} className="text-indigo-600" />
+                      ) : (
+                        <Square size={18} className="text-slate-300 hover:text-slate-400" />
+                      )}
+                    </button>
+
                     <div className="rounded bg-indigo-50 p-1 text-indigo-600">
                       <AlignLeft size={14} />
                     </div>
                     <span className="font-mono text-xs font-bold text-slate-700">{p.id}</span>
                   </div>
-                  {p.payload?.created_at && (
-                    <span className="text-[10px] text-slate-400">
-                      {new Date(p.payload.created_at * 1000).toLocaleString()}
-                    </span>
-                  )}
+                  <div className="flex items-center gap-3">
+                    {p.payload?.created_at && (
+                      <span className="text-[10px] text-slate-400">
+                        {new Date((p.payload.created_at as number) * 1000).toLocaleString()}
+                      </span>
+                    )}
+                    <button
+                      onClick={() => handleDelete(p.id)}
+                      className="rounded p-1.5 text-slate-400 transition-colors hover:bg-rose-50 hover:text-rose-600"
+                      title="永久删除"
+                    >
+                      <Trash2 size={14} />
+                    </button>
+                  </div>
                 </div>
 
                 <div className="mb-3 pl-7">

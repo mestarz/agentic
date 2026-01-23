@@ -40,6 +40,7 @@ func main() {
 			CoreModelID       string `json:"core_model_id"`
 			RagEnabled        bool   `json:"rag_enabled"`
 			RagEmbeddingModel string `json:"rag_embedding_model_id"`
+			SanitizationModel string `json:"sanitization_model_id"`
 		}
 		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 			http.Error(w, err.Error(), http.StatusBadRequest)
@@ -54,7 +55,7 @@ func main() {
 		}
 
 		out := make(chan string)
-		go agentSvc.Chat(r.Context(), req.SessionID, req.Query, req.AgentModelID, req.CoreModelID, req.RagEnabled, req.RagEmbeddingModel, out)
+		go agentSvc.Chat(r.Context(), req.SessionID, req.Query, req.AgentModelID, req.CoreModelID, req.RagEnabled, req.RagEmbeddingModel, req.SanitizationModel, out)
 		for c := range out {
 			fmt.Fprintf(w, "data: %s\n\n", c)
 			flusher.Flush()

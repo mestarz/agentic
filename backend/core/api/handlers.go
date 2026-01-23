@@ -55,12 +55,13 @@ func (h *ContextHandler) GetContext(w http.ResponseWriter, r *http.Request) {
 		ModelID           string `json:"model_id"`
 		RagEnabled        bool   `json:"rag_enabled"`
 		RagEmbeddingModel string `json:"rag_embedding_model"`
+		SanitizationModel string `json:"sanitization_model_id"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
-	msgs, _ := h.svc.GetOptimizedContext(r.Context(), req.SessionID, req.Query, req.ModelID, req.RagEnabled, req.RagEmbeddingModel)
+	msgs, _ := h.svc.GetOptimizedContext(r.Context(), req.SessionID, req.Query, req.ModelID, req.RagEnabled, req.RagEmbeddingModel, req.SanitizationModel)
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(map[string]interface{}{"messages": msgs})
 }
@@ -174,6 +175,38 @@ func (h *AdminHandler) ServeVectors(w http.ResponseWriter, r *http.Request) {
 		// the repo struct has them private or we need getters.
 		// For now, let's require collection param.
 		http.Error(w, "Missing collection parameter", http.StatusBadRequest)
+		return
+	}
+
+	if r.Method == http.MethodDelete {
+		var ids []string
+
+		// 1. Try parsing from Body
+		var bodyReq struct {
+			IDs []string `json:"ids"`
+		}
+		if err := json.NewDecoder(r.Body).Decode(&bodyReq); err == nil && len(bodyReq.IDs) > 0 {
+			ids = bodyReq.IDs
+		}
+
+		// 2. Fallback to Query Param
+		if len(ids) == 0 {
+			idParam := r.URL.Query().Get("id")
+			if idParam != "" {
+				ids = strings.Split(idParam, ",")
+			}
+		}
+
+		if len(ids) == 0 {
+			http.Error(w, "Missing ids parameter (in body or query)", http.StatusBadRequest)
+			return
+		}
+
+		if err := h.vectorRepo.DeletePoints(r.Context(), collection, ids); err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+		w.WriteHeader(http.StatusOK)
 		return
 	}
 

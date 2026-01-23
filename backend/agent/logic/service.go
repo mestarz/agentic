@@ -26,13 +26,14 @@ func NewCoreServiceClient(url string) *CoreServiceClient {
 	}
 }
 
-func (c *CoreServiceClient) GetOptimizedContext(ctx context.Context, sessionID, query, modelID string, ragEnabled bool, ragEmbeddingModel string) ([]domain.Message, error) {
+func (c *CoreServiceClient) GetOptimizedContext(ctx context.Context, sessionID, query, modelID string, ragEnabled bool, ragEmbeddingModel string, sanitizationModel string) ([]domain.Message, error) {
 	requestPayload, err := json.Marshal(map[string]interface{}{
-		"session_id":          sessionID,
-		"query":               query,
-		"model_id":            modelID,
-		"rag_enabled":         ragEnabled,
-		"rag_embedding_model": ragEmbeddingModel,
+		"session_id":            sessionID,
+		"query":                 query,
+		"model_id":              modelID,
+		"rag_enabled":           ragEnabled,
+		"rag_embedding_model":   ragEmbeddingModel,
+		"sanitization_model_id": sanitizationModel,
 	})
 	if err != nil {
 		return nil, err
@@ -195,7 +196,7 @@ type SSEResponse struct {
 	Trace   *domain.TraceEvent     `json:"trace,omitempty"`
 }
 
-func (s *AgentService) Chat(ctx context.Context, sessionID, query, agentModelID, coreModelID string, ragEnabled bool, ragEmbeddingModel string, out chan<- string) {
+func (s *AgentService) Chat(ctx context.Context, sessionID, query, agentModelID, coreModelID string, ragEnabled bool, ragEmbeddingModel string, sanitizationModel string, out chan<- string) {
 	log.Printf("[Agent] Chat Request - Session: %s, Model: %s, RAG: %v", sessionID, agentModelID, ragEnabled)
 	start := time.Now()
 
@@ -237,9 +238,11 @@ func (s *AgentService) Chat(ctx context.Context, sessionID, query, agentModelID,
 		"model_id":            coreModelID,
 		"rag_enabled":         ragEnabled,
 		"rag_embedding_model": ragEmbeddingModel,
+		// 记录清洗模型 ID，便于 Trace 追踪
+		"sanitization_model": sanitizationModel,
 	})
 
-	optimizedMsgs, err := s.coreClient.GetOptimizedContext(ctx, sessionID, query, coreModelID, ragEnabled, ragEmbeddingModel)
+	optimizedMsgs, err := s.coreClient.GetOptimizedContext(ctx, sessionID, query, coreModelID, ragEnabled, ragEmbeddingModel, sanitizationModel)
 	if err != nil {
 		log.Printf("[Agent] Core Context Error - Session: %s, Error: %v", sessionID, err)
 		emitTrace("Agent", "Frontend", "发生错误", err.Error())

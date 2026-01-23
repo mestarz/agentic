@@ -37,7 +37,7 @@ func NewEngine(h *history.Service, llmServiceURL string, m *MemoryService) *Engi
 }
 
 // BuildPayload 驱动管线执行，并负责将管线生成的内部 Trace 信息归一化为业务层可理解的格式。
-func (e *Engine) BuildPayload(ctx stdctx.Context, id string, query string, modelID string, ragEnabled bool, ragEmbeddingModel string) ([]domain.Message, error) {
+func (e *Engine) BuildPayload(ctx stdctx.Context, id string, query string, modelID string, ragEnabled bool, ragEmbeddingModel string, sanitizationModel string) ([]domain.Message, error) {
 	log.Printf("[Core] Pipeline Start - Session: %s, Query: %s, RAG: %v", id, query, ragEnabled)
 	start := time.Now()
 
@@ -54,6 +54,8 @@ func (e *Engine) BuildPayload(ctx stdctx.Context, id string, query string, model
 	data.Meta["model_id"] = modelID
 	data.Meta["rag_enabled"] = ragEnabled
 	data.Meta["rag_embedding_model"] = ragEmbeddingModel
+	// 将前端传递的清洗模型 ID 存入元数据，以便在 AppendMessage 时取出使用
+	data.Meta["sanitization_model_id"] = sanitizationModel
 
 	// 2. 启动 Pipeline 逻辑处理
 	if err := e.pipeline.Execute(ctx, data); err != nil {
@@ -149,6 +151,8 @@ func (s *Service) CreateSession(ctx stdctx.Context, appID string) (*domain.Sessi
 	return sess, err
 }
 
+const IngestBatchSize = 10 // 每 5 组对话 (10条消息) 触发一次记忆录入
+
 // AppendMessage 向会话中追加一条消息（通常是模型生成的回复）。
 func (s *Service) AppendMessage(ctx stdctx.Context, id string, msg domain.Message) (map[string]interface{}, error) {
 	log.Printf("[Core] Append Message - Session: %s, Role: %s, Len: %d", id, msg.Role, len(msg.Content))
@@ -158,12 +162,26 @@ func (s *Service) AppendMessage(ctx stdctx.Context, id string, msg domain.Messag
 		return nil, err
 	}
 
-	// 触发异步记忆录入（仅针对助手回复后的完整会话）
+	// 触发异步记忆录入
+	// 策略：批量触发，每积累 IngestBatchSize 条消息 (5个 QA 对) 触发一次
 	if msg.Role == domain.RoleAssistant && s.memorySvc != nil {
 		sess, err := s.historySvc.GetOrCreateSession(ctx, id, "")
-		if err == nil {
-			embModel, _ := sess.Messages[len(sess.Messages)-1].Meta["rag_embedding_model"].(string)
-			go s.memorySvc.Ingest(stdctx.Background(), id, sess.Messages, embModel)
+
+		if err == nil && len(sess.Messages) >= IngestBatchSize && len(sess.Messages)%IngestBatchSize == 0 {
+			// 仅截取最近的一批消息进行处理，避免重复处理旧历史
+			batchMsgs := sess.Messages[len(sess.Messages)-IngestBatchSize:]
+
+			// 从该批次中最近的一条 User 消息 (倒数第二条) 提取配置
+			userMsg := batchMsgs[len(batchMsgs)-2]
+
+			embModel, _ := userMsg.Meta["rag_embedding_model"].(string)
+			sanitizationModel, _ := userMsg.Meta["sanitization_model_id"].(string)
+			needsIngest, _ := userMsg.Meta["needs_ingest"].(bool)
+
+			if embModel != "" && needsIngest {
+				log.Printf("[Core] Triggering batch ingest for session %s (Batch Size: %d)", id, len(batchMsgs))
+				go s.memorySvc.Ingest(stdctx.Background(), id, batchMsgs, embModel, sanitizationModel)
+			}
 		}
 	}
 
@@ -175,7 +193,7 @@ func (s *Service) AppendMessage(ctx stdctx.Context, id string, msg domain.Messag
 
 // GetOptimizedContext 是核心业务入口。
 // 它负责记录用户请求并驱动 Engine 生成优化后的模型上下文。
-func (s *Service) GetOptimizedContext(ctx stdctx.Context, id, query string, modelID string, ragEnabled bool, ragEmbeddingModel string) ([]domain.Message, error) {
+func (s *Service) GetOptimizedContext(ctx stdctx.Context, id, query string, modelID string, ragEnabled bool, ragEmbeddingModel string, sanitizationModel string) ([]domain.Message, error) {
 	log.Printf("[Core] GetContext Request - Session: %s", id)
 
 	// 1. 自动确保 Session 环境存在
@@ -186,7 +204,7 @@ func (s *Service) GetOptimizedContext(ctx stdctx.Context, id, query string, mode
 	s.historySvc.Append(ctx, id, userMsg)
 
 	// 3. 调用核心引擎通过 Pipeline 构建优化后的消息 Payload
-	payload, err := s.engine.BuildPayload(ctx, id, query, modelID, ragEnabled, ragEmbeddingModel)
+	payload, err := s.engine.BuildPayload(ctx, id, query, modelID, ragEnabled, ragEmbeddingModel, sanitizationModel)
 
 	// 4. 将处理后的元数据（如 Token 统计）同步更新到持久化库的消息 Meta 中
 	if err == nil && len(payload) > 0 {

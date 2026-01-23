@@ -7,6 +7,7 @@ import (
 	"context-fabric/backend/core/util"
 	"encoding/json"
 	"fmt"
+	"io"
 	"log"
 	"net/http"
 	"time"
@@ -21,9 +22,10 @@ type MemoryService struct {
 }
 
 type ingestTask struct {
-	SessionID string
-	Messages  []domain.Message
-	ModelID   string
+	SessionID           string
+	Messages            []domain.Message
+	ModelID             string
+	SanitizationModelID string
 }
 
 func NewMemoryService(repo domain.VectorRepository, llmURL string) *MemoryService {
@@ -172,9 +174,9 @@ func (s *MemoryService) executeInstruction(ctx context.Context, fact domain.Stag
 	return nil
 }
 
-func (s *MemoryService) Ingest(ctx context.Context, sessionID string, messages []domain.Message, modelID string) error {
+func (s *MemoryService) Ingest(ctx context.Context, sessionID string, messages []domain.Message, modelID string, sanitizationModel string) error {
 	select {
-	case s.ingestChan <- ingestTask{SessionID: sessionID, Messages: messages, ModelID: modelID}:
+	case s.ingestChan <- ingestTask{SessionID: sessionID, Messages: messages, ModelID: modelID, SanitizationModelID: sanitizationModel}:
 		return nil
 	default:
 		return fmt.Errorf("memory ingest channel full")
@@ -217,10 +219,14 @@ func (s *MemoryService) processIngest(ctx context.Context, task ingestTask) erro
 	log.Printf("[Memory] Ingest: Start sanitizing session %s (%d messages)", task.SessionID, len(task.Messages))
 
 	// 1. 调用 LLM Gateway 进行清洗
-	// 使用任务中指定的模型 ID，如果为空则直接报错
-	sanitizeModel := task.ModelID
+	// 使用专门的清洗模型 (Chat Model)，而不是 Embedding 模型。
+	// 这里优先使用任务中传入的模型 ID (来自前端配置)，如果没有则回退到环境变量或默认值。
+	sanitizeModel := task.SanitizationModelID
 	if sanitizeModel == "" {
-		return fmt.Errorf("no model ID provided for memory ingestion")
+		sanitizeModel = util.GetEnv("AGENTIC_SANITIZE_MODEL", "deepseek-chat")
+	}
+	if sanitizeModel == "" {
+		return fmt.Errorf("no sanitization model configured (AGENTIC_SANITIZE_MODEL)")
 	}
 
 	facts, err := s.sanitizeDialogue(ctx, task.Messages, sanitizeModel)
@@ -231,6 +237,7 @@ func (s *MemoryService) processIngest(ctx context.Context, task ingestTask) erro
 
 	for i, f := range facts {
 		// 2. 为每个事实获取 Embedding
+		// 这里必须使用 Embedding 模型 (向量模型)，该模型 ID 同样来自前端 RAG 配置。
 		embModel := task.ModelID
 		if embModel == "" {
 			embModel = "text-embedding-3-small"
@@ -284,7 +291,8 @@ func (s *MemoryService) sanitizeDialogue(ctx context.Context, msgs []domain.Mess
 	defer resp.Body.Close()
 
 	if resp.StatusCode != 200 {
-		return nil, fmt.Errorf("llm gateway sanitize error: %s", resp.Status)
+		bodyBytes, _ := io.ReadAll(resp.Body)
+		return nil, fmt.Errorf("llm gateway sanitize error: %s, details: %s", resp.Status, string(bodyBytes))
 	}
 
 	var result struct {

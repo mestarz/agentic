@@ -1,0 +1,8 @@
+{
+  "scripts": {
+    "knip": "knip"
+  },
+  "devDependencies": {
+    "knip": "^5.82.1"
+  }
+}

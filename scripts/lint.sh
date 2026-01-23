@@ -12,7 +12,7 @@ echo "🔍 开始执行全栈静态检查..."
 echo "-------------------------------------------------------"
 
 # 1. 检查 Go 后端
-echo "🐹 [1/3] 正在检查 Go 代码 (golangci-lint)..."
+echo "🐹 [1/4] 正在检查 Go 代码 (golangci-lint)..."
 if command -v golangci-lint >/dev/null 2>&1; then
     cd "$ROOT_DIR/backend"
     golangci-lint run ./... --config "$ROOT_DIR/.golangci.yml"
@@ -26,7 +26,7 @@ else
 fi
 
 # 2. 检查 Python 网关
-echo "🐍 [2/3] 正在检查 Python 代码 (ruff)..."
+echo "🐍 [2/4] 正在检查 Python 代码 (ruff)..."
 if [ -f "$ROOT_DIR/llm-service/venv/bin/ruff" ]; then
     "$ROOT_DIR/llm-service/venv/bin/ruff" check "$ROOT_DIR/llm-service"
     if [ $? -eq 0 ]; then
@@ -39,7 +39,7 @@ else
 fi
 
 # 3. 检查 Web 前端 (ESLint + Type Check)
-echo "⚛️ [3/3] 正在检查前端代码 (eslint + tsc)..."
+echo "⚛️ [3/4] 正在检查前端代码 (eslint + tsc)..."
 if [ -d "$ROOT_DIR/frontend/node_modules" ]; then
     cd "$ROOT_DIR/frontend"
     echo "--- 正在运行 ESLint ---"
@@ -58,6 +58,20 @@ if [ -d "$ROOT_DIR/frontend/node_modules" ]; then
     fi
 else
     echo "⚠️ 警告: 未找到前端 node_modules。"
+fi
+
+# 4. 检查冗余代码 (Knip)
+echo "✂️ [4/4] 正在检查冗余代码 (knip)..."
+if [ -d "$ROOT_DIR/node_modules" ]; then
+    cd "$ROOT_DIR"
+    npm run knip
+    if [ $? -eq 0 ]; then
+        echo "✅ 冗余代码检查通过。"
+    else
+        echo "❌ 冗余代码检查发现问题。"
+    fi
+else
+    echo "⚠️ 警告: 未找到根目录 node_modules，无法运行 knip。"
 fi
 
 echo "-------------------------------------------------------"

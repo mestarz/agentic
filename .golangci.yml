@@ -8,6 +8,7 @@ linters:
     - unused
     - bodyclose
     - misspell
+    - typecheck
 
 run:
   timeout: 5m
@@ -25,3 +26,7 @@ issues:
     - text: "Error return value of"
       linters:
         - errcheck
+
+linters-settings:
+  unused:
+    check-exported: false

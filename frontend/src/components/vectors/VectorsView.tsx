@@ -8,6 +8,9 @@ import {
   Trash2,
   CheckSquare,
   Square,
+  ArrowRight,
+  BrainCircuit,
+  Zap,
 } from 'lucide-react';
 
 interface VectorPoint {
@@ -22,6 +25,149 @@ interface ScrollResult {
     points: VectorPoint[];
     next_page_offset?: string | number;
   };
+}
+
+interface MemoryState {
+  ingest_queue_size: number;
+  last_ingest_time: string;
+  last_ingest_session: string;
+  last_ingest_status: string;
+  last_ingest_input_count: number;
+  last_ingest_output_count: number;
+  last_ingest_topic: string;
+  is_reflecting: boolean;
+  last_reflection_time: string;
+  last_reflection_status: string;
+  last_reflection_facts_processed: number;
+  last_reflection_instructions: number;
+}
+
+/**
+ * MemoryDashboard 展示记忆系统的实时运行状态
+ * 包含快系统 (Ingestion) 的清洗效率和慢系统 (Reflection) 的反思进度
+ */
+function MemoryDashboard() {
+  const [state, setState] = useState<MemoryState | null>(null);
+
+  useEffect(() => {
+    const fetchState = async () => {
+      try {
+        const res = await fetch('/api/admin/memory/status');
+        if (res.ok) {
+          setState(await res.json());
+        }
+      } catch (e) {
+        console.error('Failed to fetch memory status', e);
+      }
+    };
+
+    fetchState();
+    // 每 5 秒自动轮询一次后端状态
+    const interval = setInterval(fetchState, 5000);
+    return () => clearInterval(interval);
+  }, []);
+
+  if (!state) return null;
+
+  return (
+    <div className="grid grid-cols-2 gap-4 border-b border-slate-200 bg-slate-50/50 p-6">
+      {/* 快系统 (Ingestion) 卡片：负责将对话转化为原子事实并存入暂存区 */}
+      <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
+        <div className="mb-3 flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <Zap size={16} className="text-amber-500" />
+            <h3 className="text-xs font-black tracking-wide text-slate-800 uppercase">
+              Ingestion (Fast System)
+            </h3>
+          </div>
+          <div className="flex items-center gap-2">
+            <span className="text-[10px] font-bold text-slate-400 uppercase">Queue</span>
+            <span className="rounded bg-slate-100 px-1.5 py-0.5 font-mono text-xs font-bold text-slate-700">
+              {state.ingest_queue_size}
+            </span>
+          </div>
+        </div>
+
+        <div className="space-y-3">
+          <div className="flex items-center justify-between text-xs">
+            <span className="font-bold text-slate-500">Last Status</span>
+            <span
+              className={`rounded px-1.5 py-0.5 font-bold uppercase ${
+                state.last_ingest_status === 'success'
+                  ? 'bg-emerald-50 text-emerald-600'
+                  : state.last_ingest_status === 'processing'
+                    ? 'bg-blue-50 text-blue-600'
+                    : 'bg-slate-100 text-slate-500'
+              }`}
+            >
+              {state.last_ingest_status || 'IDLE'}
+            </span>
+          </div>
+
+          <div className="rounded-lg bg-slate-50 p-2 text-xs">
+            <div className="mb-1 flex items-center justify-between text-slate-500">
+              <span>Wait List</span>
+              <span>Staging</span>
+            </div>
+            <div className="flex items-center justify-between font-mono font-bold text-slate-700">
+              <span>{state.last_ingest_input_count} msgs</span>
+              <ArrowRight size={12} className="text-slate-300" />
+              <span>{state.last_ingest_output_count} facts</span>
+            </div>
+            {state.last_ingest_topic && (
+              <div className="mt-1 truncate text-[10px] text-slate-400">
+                Last Topic: {state.last_ingest_topic}
+              </div>
+            )}
+          </div>
+        </div>
+      </div>
+
+      {/* 慢系统 (Reflection) 卡片：负责对暂存区事实进行仲裁、合并并转化为长期记忆 */}
+      <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
+        <div className="mb-3 flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <BrainCircuit size={16} className="text-indigo-500" />
+            <h3 className="text-xs font-black tracking-wide text-slate-800 uppercase">
+              Reflection (Slow System)
+            </h3>
+          </div>
+          {state.is_reflecting && (
+            <div className="flex items-center gap-1.5 rounded-full bg-indigo-50 px-2 py-0.5">
+              <span className="relative flex h-2 w-2">
+                <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-indigo-400 opacity-75"></span>
+                <span className="relative inline-flex h-2 w-2 rounded-full bg-indigo-500"></span>
+              </span>
+              <span className="text-[10px] font-bold text-indigo-600 uppercase">Running</span>
+            </div>
+          )}
+        </div>
+
+        <div className="space-y-3">
+          <div className="flex items-center justify-between text-xs">
+            <span className="font-bold text-slate-500">Last Run</span>
+            <span className="font-mono text-[10px] text-slate-600">
+              {state.last_reflection_time
+                ? new Date(state.last_reflection_time).toLocaleTimeString()
+                : '-'}
+            </span>
+          </div>
+
+          <div className="rounded-lg bg-slate-50 p-2 text-xs">
+            <div className="mb-1 flex items-center justify-between text-slate-500">
+              <span>Facts Processed</span>
+              <span>Evolutions</span>
+            </div>
+            <div className="flex items-center justify-between font-mono font-bold text-slate-700">
+              <span>{state.last_reflection_facts_processed}</span>
+              <ArrowRight size={12} className="text-slate-300" />
+              <span>{state.last_reflection_instructions}</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
 }
 
 export function VectorsView() {
@@ -146,6 +292,7 @@ export function VectorsView() {
 
       {/* Main Content */}
       <div className="flex flex-1 flex-col overflow-hidden bg-white">
+        <MemoryDashboard />
         {/* Toolbar */}
         <div className="flex items-center justify-between border-b border-slate-200 bg-slate-50 px-6 py-3">
           <div className="flex items-center gap-4">

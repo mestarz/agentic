@@ -11,6 +11,7 @@ import {
   Monitor,
   Database,
   Search,
+  BrainCircuit,
   AlertCircle,
   AlertTriangle,
   Info,
@@ -19,7 +20,7 @@ import {
   X,
 } from 'lucide-react';
 
-type LogType = 'core' | 'agent' | 'llm' | 'frontend' | 'qdrant';
+type LogType = 'core' | 'agent' | 'llm' | 'frontend' | 'qdrant' | 'memory';
 type LogLevel = 'all' | 'error' | 'warning' | 'info';
 
 interface LogEntry {
@@ -73,6 +74,33 @@ export function SystemLogsView() {
   const parseLogLine = useCallback(
     (line: string, index: number): LogEntry => {
       const id = `${activeLog}-${index}`;
+
+      // Handle JSON logs (Memory System)
+      if (activeLog === 'memory') {
+        try {
+          const parsed = JSON.parse(line);
+          return {
+            id,
+            timestamp: parsed.timestamp
+              ? parsed.timestamp.replace('T', ' ').replace('Z', '').split('.')[0]
+              : undefined,
+            category: parsed.action || 'Event',
+            level: 'info',
+            message:
+              typeof parsed.details === 'object'
+                ? JSON.stringify(parsed.details)
+                : String(parsed.details),
+            raw: line,
+          };
+        } catch (error) {
+          console.debug(
+            'Failed to parse memory log line as JSON, falling back to text mode:',
+            error,
+          );
+          // Fallback if line is not valid JSON
+        }
+      }
+
       // Core/Agent: 2026/01/22 19:28:28 [Category] (LEVEL: )?Message
       const coreRegex =
         /^(\d{4}\/\d{2}\/\d{2} \d{2}:\d{2}:\d{2}) \[([^\]]+)\] (?:(ERROR|WARNING|INFO|DEBUG): )?(.*)$/i;
@@ -206,6 +234,12 @@ export function SystemLogsView() {
       color: 'text-amber-600',
     },
     { id: 'frontend', label: '前端服务 (Web)', icon: <Monitor size={16} />, color: 'text-sky-500' },
+    {
+      id: 'memory',
+      label: '记忆系统 (Memory)',
+      icon: <BrainCircuit size={16} />,
+      color: 'text-fuchsia-500',
+    },
   ];
 
   return (

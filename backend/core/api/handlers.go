@@ -70,10 +70,21 @@ func (h *ContextHandler) GetContext(w http.ResponseWriter, r *http.Request) {
 type AdminHandler struct {
 	history    *history.Service
 	vectorRepo *persistence.QdrantRepository
+	memorySvc  *context.MemoryService
 }
 
-func NewAdminHandler(h *history.Service, v *persistence.QdrantRepository) *AdminHandler {
-	return &AdminHandler{history: h, vectorRepo: v}
+func NewAdminHandler(h *history.Service, v *persistence.QdrantRepository, m *context.MemoryService) *AdminHandler {
+	return &AdminHandler{history: h, vectorRepo: v, memorySvc: m}
+}
+
+func (h *AdminHandler) GetMemoryStatus(w http.ResponseWriter, r *http.Request) {
+	if h.memorySvc == nil {
+		http.Error(w, "Memory service not configured", http.StatusNotImplemented)
+		return
+	}
+	state := h.memorySvc.GetState()
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(state)
 }
 
 func (h *AdminHandler) parseID(r *http.Request) string {
@@ -254,6 +265,7 @@ func (h *AdminHandler) ServeLogs(w http.ResponseWriter, r *http.Request) {
 		"llm":      "llm-gateway.log",
 		"frontend": "frontend.log",
 		"qdrant":   "qdrant.log",
+		"memory":   "memory.log",
 	}
 
 	fileName, ok := allowedFiles[fileType]

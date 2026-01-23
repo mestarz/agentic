@@ -95,13 +95,14 @@ func main() {
 	mux.HandleFunc("/api/v1/context", ctxHandler.GetContext)
 
 	// 管理后台接口
-	admin := api.NewAdminHandler(hSvc, vRepo)
+	admin := api.NewAdminHandler(hSvc, vRepo, mSvc)
 	mux.HandleFunc("/api/admin/sessions", admin.ServeSessions)
 	mux.HandleFunc("/api/admin/sessions/", admin.ServeSessions)
 	mux.HandleFunc("/api/admin/testcases", admin.ServeTestCases)
 	mux.HandleFunc("/api/admin/testcases/", admin.ServeTestCases)
 	mux.HandleFunc("/api/admin/vectors", admin.ServeVectors)
 	mux.HandleFunc("/api/admin/status", admin.GetSystemStatus)
+	mux.HandleFunc("/api/admin/memory/status", admin.GetMemoryStatus)
 	mux.HandleFunc("/api/admin/logs", admin.ServeLogs)
 	mux.HandleFunc("/api/admin/docs", admin.ServeDocs)
 
